@@ -10,7 +10,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -55,6 +55,8 @@ class _AgereData:
         self.breakdown = None
         self.marginal = Decimal("0")
         self.consumption = Decimal("0")
+        self.days_elapsed = 0
+        self.cycle_days = 0
         self._listeners: list = []
 
     async def async_load(self) -> None:
@@ -91,9 +93,10 @@ class _AgereData:
         prev = self._manager.state
         self._manager.update(today, meter_total)
         self.consumption = self._manager.consumption(meter_total)
-        days = self._manager.days_elapsed(today)
-        self.breakdown = calcular(self.consumption, days, self.config)
-        self.marginal = marginal_price(self.consumption, days, self.config)
+        self.days_elapsed = self._manager.days_elapsed(today)
+        self.cycle_days = self._manager.cycle_length_days()
+        self.breakdown = calcular(self.consumption, self.cycle_days, self.config)
+        self.marginal = marginal_price(self.consumption, self.cycle_days, self.config)
         if self._manager.state is not prev:
             self.hass.async_create_task(self._async_save())
         for cb in self._listeners:
@@ -127,6 +130,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
     data.recompute()  # initial
     entry.async_on_unload(
         async_track_state_change_event(hass, [data.source], _on_source_change)
+    )
+    entry.async_on_unload(
+        async_track_time_change(
+            hass, lambda now: data.recompute(), hour=0, minute=0, second=30
+        )
     )
 
 
@@ -170,6 +178,7 @@ class AgereTotalCostSensor(_AgereBase):
         bd = self._data.breakdown
         if not bd:
             return None
+        active_tiers = [line.index + 1 for line in bd.lines if line.qty > 0]
         return {
             "base_without_vat": float(bd.base_without_vat),
             "vat": float(bd.vat),
@@ -178,6 +187,18 @@ class AgereTotalCostSensor(_AgereBase):
             "sanitation": float(bd.sanitation),
             "waste": float(bd.waste),
             "taxes": float(bd.taxes),
+            "days_elapsed": self._data.days_elapsed,
+            "billing_days": self._data.cycle_days,
+            "current_tier": active_tiers[-1] if active_tiers else 1,
+            "tiers": [
+                {
+                    "tier": line.index + 1,
+                    "m3": float(line.qty),
+                    "eur_per_m3": float(line.rate),
+                    "eur": float(line.value),
+                }
+                for line in bd.lines
+            ],
         }
 
 

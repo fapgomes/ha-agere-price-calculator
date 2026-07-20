@@ -84,3 +84,26 @@ def test_consumption_and_days_before_first_update():
 
 def test_reset_day_property_exposed():
     assert CycleManager(reset_day=13).reset_day == 13
+
+
+def test_cycle_length_days_july():
+    mgr = CycleManager(reset_day=13)
+    mgr.update(date(2026, 7, 20), Decimal("2600"))
+    assert mgr.cycle_length_days() == 31  # 07-13 -> 08-13
+
+
+def test_cycle_length_days_february_non_leap():
+    mgr = CycleManager(reset_day=13)
+    mgr.update(date(2026, 2, 20), Decimal("2600"))
+    assert mgr.cycle_length_days() == 28  # 02-13 -> 03-13 (2026 not leap)
+
+
+def test_cycle_length_days_december_wrap():
+    mgr = CycleManager(reset_day=13)
+    mgr.update(date(2026, 12, 20), Decimal("2600"))
+    assert mgr.cycle_length_days() == 31  # 12-13 -> 01-13
+
+
+def test_cycle_length_days_before_init_defaults_30():
+    mgr = CycleManager(reset_day=13)
+    assert mgr.cycle_length_days() == 30

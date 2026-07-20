@@ -43,10 +43,14 @@ applies to waste (variable, fixed, or the waste-management tax) — that
 exemption comes from Portuguese law (art. 2, nº2 CIVA).
 
 The water tier *limits* (5/10/15/25 m³) are for a 30-day cycle and are
-prorated by the number of days actually elapsed in your cycle
-(`round(limit × days / 30)`), matching how AGERE bills cycles that aren't
-exactly 30 days. Fixed charges (availability, waste fixed, waste-management
-tax) are billed in full per cycle, not prorated.
+prorated by the fixed length of your current billing cycle (cycle start →
+next reset day), not by days elapsed so far
+(`round(limit × cycle_length_days / 30)`), matching how AGERE bills cycles
+that aren't exactly 30 days. Because the cycle length is constant all cycle
+long, `total_cost` only ever increases with consumption within a cycle
+(resetting at each new billing cycle) — it never shrinks as the cycle ages.
+Fixed charges (availability, waste fixed, waste-management tax) are billed in
+full per cycle, not prorated.
 
 These are the integration's built-in *defaults* — AGERE updates its tariff
 annually, so treat these values as a snapshot for 2026, not a permanent

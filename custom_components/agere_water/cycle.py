@@ -22,6 +22,13 @@ def last_reset_on_or_before(day: date, reset_day: int) -> date:
     return date(year, month, reset_day)
 
 
+def _next_reset_after(cycle_start: date, reset_day: int) -> date:
+    """First reset boundary strictly after cycle_start (reset_day of the next month)."""
+    if cycle_start.month == 12:
+        return date(cycle_start.year + 1, 1, reset_day)
+    return date(cycle_start.year, cycle_start.month + 1, reset_day)
+
+
 class CycleManager:
     def __init__(self, reset_day: int, state: CycleState | None = None) -> None:
         self._reset_day = reset_day
@@ -50,3 +57,14 @@ class CycleManager:
         if self._state is None:
             return 1
         return max(1, (now - self._state.cycle_start).days + 1)
+
+    def cycle_length_days(self) -> int:
+        """Total days in the current cycle (cycle_start -> next reset boundary).
+
+        Constant for the whole cycle, so tier-limit proration stays fixed and the
+        accumulated cost is monotonic in consumption. Falls back to 30 before init.
+        """
+        if self._state is None:
+            return 30
+        nxt = _next_reset_after(self._state.cycle_start, self._reset_day)
+        return (nxt - self._state.cycle_start).days
