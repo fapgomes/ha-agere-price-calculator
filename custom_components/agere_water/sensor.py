@@ -18,7 +18,7 @@ from .calculator import calcular, marginal_price
 from .const import (
     CONF_INCLUDE_VAT, CONF_RESET_DAY, CONF_SANITATION, CONF_SOURCE,
     CONF_TAXES, CONF_VAT_RATE, CONF_WASTE, CONF_WATER, DEFAULT_RESET_DAY,
-    DOMAIN, CalcConfig, Tariff,
+    DEFAULT_VAT_RATE, DOMAIN, CalcConfig, Tariff,
 )
 from .cycle import CycleManager, CycleState
 
@@ -27,9 +27,9 @@ _STORE_VERSION = 1
 
 def _calc_config(options: dict) -> CalcConfig:
     try:
-        vat_rate = Decimal(str(options.get(CONF_VAT_RATE, "0.06")))
-    except InvalidOperation:
-        vat_rate = Decimal("0.06")
+        vat_rate = Decimal(str(options.get(CONF_VAT_RATE, DEFAULT_VAT_RATE)))
+    except (InvalidOperation, TypeError):
+        vat_rate = DEFAULT_VAT_RATE
     return CalcConfig(
         tariff=Tariff(),
         include_water=options.get(CONF_WATER, True),
@@ -61,7 +61,7 @@ class _AgereData:
         stored = await self._store.async_load()
         if stored:
             self._manager = CycleManager(
-                self._manager._reset_day,
+                self._manager.reset_day,
                 CycleState(
                     cycle_start=date.fromisoformat(stored["cycle_start"]),
                     baseline=Decimal(stored["baseline"]),
@@ -152,7 +152,6 @@ class _AgereBase(SensorEntity):
 
 class AgereTotalCostSensor(_AgereBase):
     _attr_name = "AGERE total cost"
-    _attr_unique_id_suffix = "total_cost"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "EUR"
@@ -194,11 +193,14 @@ class AgereMarginalPriceSensor(_AgereBase):
 
     @property
     def native_value(self):
+        if self._data.breakdown is None:
+            return None
         return float(self._data.marginal)
 
 
 class AgereCycleConsumptionSensor(_AgereBase):
     _attr_name = "AGERE cycle consumption"
+    _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "m³"
 
@@ -209,6 +211,8 @@ class AgereCycleConsumptionSensor(_AgereBase):
 
     @property
     def native_value(self):
+        if self._data.breakdown is None:
+            return None
         # integer m³ to match AGERE metering
         return int(self._data.consumption)
 

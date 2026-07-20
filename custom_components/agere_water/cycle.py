@@ -31,6 +31,10 @@ class CycleManager:
     def state(self) -> CycleState | None:
         return self._state
 
+    @property
+    def reset_day(self) -> int:
+        return self._reset_day
+
     def update(self, now: date, meter_total: Decimal) -> CycleState:
         boundary = last_reset_on_or_before(now, self._reset_day)
         if self._state is None or boundary > self._state.cycle_start:

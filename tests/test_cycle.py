@@ -80,3 +80,7 @@ def test_consumption_and_days_before_first_update():
     mgr = CycleManager(reset_day=13)
     assert mgr.consumption(Decimal("2600")) == Decimal("0")
     assert mgr.days_elapsed(date(2026, 7, 20)) == 1
+
+
+def test_reset_day_property_exposed():
+    assert CycleManager(reset_day=13).reset_day == 13
