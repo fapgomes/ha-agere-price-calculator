@@ -72,6 +72,15 @@ type that folder is typically:
 
 ### Option A — HACS (recommended)
 
+**One-click:** open this repository in your Home Assistant's HACS (requires
+HACS installed):
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fapgomes&repository=ha-agere-price-calculator&category=integration)
+
+Then click **Download**, and **restart Home Assistant**.
+
+Or manually:
+
 1. In HACS, open the overflow menu (⋮) → **Custom repositories**.
 2. Add the repository URL
    `https://github.com/fapgomes/ha-agere-price-calculator`, category
@@ -101,7 +110,11 @@ add the integration from the UI.
 
 ## Configuration
 
-Go to **Settings → Devices & Services → Add Integration**, search for
+**One-click:** start adding the integration:
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=agere_water)
+
+Or go to **Settings → Devices & Services → Add Integration**, search for
 "AGERE Water Price", and set:
 
 - **Source entity** — the sensor providing your cumulative water-meter
