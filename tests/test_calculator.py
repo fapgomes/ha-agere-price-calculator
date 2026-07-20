@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from custom_components.agere_water.calculator import money, price4, tier_limits
 from custom_components.agere_water.const import DEFAULT_TARIFF, CalcConfig
 
 
@@ -14,3 +15,17 @@ def test_calc_config_defaults():
     assert cfg.include_vat is True
     assert cfg.vat_rate == Decimal("0.06")
     assert cfg.tariff.tax_waste_mgmt == Decimal("2.8821")
+
+
+def test_money_rounds_half_up():
+    assert money(Decimal("3.7014")) == Decimal("3.70")
+    assert money(Decimal("13.4652")) == Decimal("13.47")
+    assert money(Decimal("2.6544")) == Decimal("2.65")
+
+
+def test_tier_limits_30_days_unchanged():
+    assert tier_limits(30, (5, 10, 15, 25)) == [5, 10, 15, 25]
+
+
+def test_tier_limits_28_days_prorated():
+    assert tier_limits(28, (5, 10, 15, 25)) == [5, 9, 14, 23]
