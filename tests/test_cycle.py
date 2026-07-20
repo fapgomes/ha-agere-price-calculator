@@ -50,3 +50,33 @@ def test_no_roll_within_same_cycle():
     assert st.cycle_start == date(2026, 7, 13)
     assert st.baseline == Decimal("2620")
     assert mgr.consumption(Decimal("2630")) == Decimal("10")
+
+
+def test_consumption_floored_when_meter_decreases():
+    mgr = CycleManager(reset_day=13)
+    mgr.update(date(2026, 7, 20), Decimal("2620"))
+    # meter reads LOWER than baseline (e.g. meter replacement/reset) -> floored at 0
+    assert mgr.consumption(Decimal("2610")) == Decimal("0")
+
+
+def test_restore_from_existing_state_no_roll():
+    state = CycleState(cycle_start=date(2026, 7, 13), baseline=Decimal("2600"))
+    mgr = CycleManager(reset_day=13, state=state)
+    st = mgr.update(date(2026, 7, 25), Decimal("2615"))  # same cycle -> no roll
+    assert st.cycle_start == date(2026, 7, 13)
+    assert st.baseline == Decimal("2600")
+    assert mgr.consumption(Decimal("2615")) == Decimal("15")
+
+
+def test_restore_from_existing_state_then_roll():
+    state = CycleState(cycle_start=date(2026, 7, 13), baseline=Decimal("2600"))
+    mgr = CycleManager(reset_day=13, state=state)
+    st = mgr.update(date(2026, 8, 20), Decimal("2650"))  # crossed into new cycle -> roll
+    assert st.cycle_start == date(2026, 8, 13)
+    assert st.baseline == Decimal("2650")
+
+
+def test_consumption_and_days_before_first_update():
+    mgr = CycleManager(reset_day=13)
+    assert mgr.consumption(Decimal("2600")) == Decimal("0")
+    assert mgr.days_elapsed(date(2026, 7, 20)) == 1
