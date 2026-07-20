@@ -93,3 +93,31 @@ def calcular(consumo: Decimal, days: int, config: CalcConfig) -> Breakdown:
     vat = money(vat_base * config.vat_rate) if config.include_vat else Decimal(0)
 
     return Breakdown(water, sanitation, waste, taxes, money(base), vat, money(base + vat), lines)
+
+
+def marginal_price(consumo: Decimal, days: int, config: CalcConfig) -> Decimal:
+    """Cost of the next cubic metre at the current cycle position (EUR/m³)."""
+    t = config.tariff
+    limits = tier_limits(days, t.water_tier_bounds)
+
+    # current tier index: first tier whose upper limit the consumption has not reached
+    idx = len(t.water_tier_prices) - 1
+    for i, limit in enumerate(limits):
+        if consumo < Decimal(limit):
+            idx = i
+            break
+
+    subject = Decimal(0)          # portion subject to VAT
+    vat_free = Decimal(0)         # portion never subject to VAT (waste variable)
+    if config.include_water:
+        subject += t.water_tier_prices[idx]
+    if config.include_sanitation:
+        subject += t.sanitation_drainage
+    if config.include_taxes:
+        subject += t.tax_water + t.tax_sanitation
+    if config.include_waste:
+        vat_free += t.waste_variable
+
+    if config.include_vat:
+        subject = subject * (Decimal(1) + config.vat_rate)
+    return price4(subject + vat_free)

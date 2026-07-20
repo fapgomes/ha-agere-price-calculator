@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from custom_components.agere_water.calculator import calcular, money, price4, tier_limits, water_lines
+from custom_components.agere_water.calculator import calcular, money, price4, tier_limits, water_lines, marginal_price
 from custom_components.agere_water.const import DEFAULT_TARIFF, CalcConfig
 
 
@@ -105,3 +105,30 @@ def test_waste_never_taxed():
     assert bd.waste == Decimal("2.94")
     assert bd.vat == Decimal("0.00")
     assert bd.total == Decimal("2.94")
+
+
+def test_marginal_price_first_tier_no_vat_water_only():
+    cfg = CalcConfig(include_sanitation=False, include_waste=False,
+                     include_taxes=False, include_vat=False)
+    # 0 m³ consumed -> next m³ in tier 0 -> 0.5080
+    assert marginal_price(Decimal("0"), 30, cfg) == Decimal("0.5080")
+
+
+def test_marginal_price_selects_tier_by_consumption():
+    cfg = CalcConfig(include_sanitation=False, include_waste=False,
+                     include_taxes=False, include_vat=False)
+    # 12 m³ (30-day limits 5/10/15/25) -> next m³ in tier [10-15] -> 0.8605
+    assert marginal_price(Decimal("12"), 30, cfg) == Decimal("0.8605")
+
+
+def test_marginal_price_top_tier():
+    cfg = CalcConfig(include_sanitation=False, include_waste=False,
+                     include_taxes=False, include_vat=False)
+    assert marginal_price(Decimal("40"), 30, cfg) == Decimal("2.6852")
+
+
+def test_marginal_price_full_with_vat():
+    cfg = CalcConfig()  # all components + 6% VAT
+    # tier 0 water 0.5080 + drainage 0.4809 + tax_water 0.0382 + tax_sanit 0.0150 = 1.0421
+    # subject *1.06 = 1.104626 ; + waste_variable 0.0147 (no VAT) = 1.119326 -> 1.1193
+    assert marginal_price(Decimal("0"), 30, cfg) == Decimal("1.1193")
