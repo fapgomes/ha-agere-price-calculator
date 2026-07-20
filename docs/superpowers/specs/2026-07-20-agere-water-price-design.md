@@ -109,20 +109,20 @@ os cobra (1,0000 unidade/período).
 
 | Sensor | Unidade | Descrição | Uso no Energy |
 |---|---|---|---|
-| `sensor.agere_preco_marginal` | EUR/m³ | preço do escalão atual (+ variáveis ativas) | *entity with current price* |
-| `sensor.agere_custo_total` | EUR | custo acumulado no ciclo (componentes ativas + fixos) | *entity tracking total costs* (recomendado) |
-| `sensor.agere_custo_agua` | EUR | sub-custo água | dashboards |
-| `sensor.agere_custo_saneamento` | EUR | sub-custo saneamento | dashboards |
-| `sensor.agere_custo_residuos` | EUR | sub-custo resíduos | dashboards |
-| `sensor.agere_custo_taxas` | EUR | sub-custo taxas | dashboards |
-| `sensor.agere_consumo_ciclo` | m³ | consumo no ciclo atual | dashboards |
+| `sensor.agere_marginal_price` | EUR/m³ | preço do escalão atual (+ variáveis ativas) | *entity with current price* |
+| `sensor.agere_total_cost` | EUR | custo acumulado no ciclo (componentes ativas + fixos) | *entity tracking total costs* (recomendado) |
+| `sensor.agere_water_cost` | EUR | sub-custo água | dashboards |
+| `sensor.agere_sanitation_cost` | EUR | sub-custo saneamento | dashboards |
+| `sensor.agere_waste_cost` | EUR | sub-custo resíduos | dashboards |
+| `sensor.agere_taxes_cost` | EUR | sub-custo taxas | dashboards |
+| `sensor.agere_cycle_consumption` | m³ | consumo no ciclo atual | dashboards |
 
-- `custo_total` e sub-custos: `state_class = total_increasing` (reset por ciclo
+- `total_cost` e sub-custos: `state_class = total_increasing` (reset por ciclo
   tratado pelo HA), `device_class = monetary`.
-- `preco_marginal`: `state_class = measurement`.
+- `marginal_price`: `state_class = measurement`.
 - Sub-sensores por componente criados apenas quando a componente está ativa.
 
-Atributos em `custo_total`: base sem IVA, valor do IVA, consumo do ciclo, dias
+Atributos em `total_cost`: base sem IVA, valor do IVA, consumo do ciclo, dias
 decorridos, escalão atual, detalhe por escalão.
 
 ## Configuração (config flow + opções)
@@ -140,7 +140,7 @@ decorridos, escalão atual, detalhe por escalão.
 
 - **Encargos fixos entram por inteiro** desde o início do ciclo (não
   prorrateados) — reflete a cobrança da fatura.
-- **Energy → apontar ao `custo_total`** (rigoroso). O `preco_marginal` é uma
+- **Energy → apontar ao `total_cost`** (rigoroso). O `marginal_price` é uma
   aproximação incremental dos escalões e não capta os encargos fixos.
 - **Proração por dias decorridos** durante o ciclo (estimativa em tempo real que
   converge para a fatura no fecho).
