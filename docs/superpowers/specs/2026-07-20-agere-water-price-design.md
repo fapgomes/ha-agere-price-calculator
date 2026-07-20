@@ -54,7 +54,12 @@ a bater certo com a fatura da AGERE.
 
 ### Proração dos escalões pelos dias do período
 Os limites dos escalões são proporcionais aos dias do período de faturação:
-`limite_efetivo = round(limite_base × dias / 30)`.
+`limite_efetivo = round(limite_base × dias / 30)`. Em tempo real (ciclo em
+curso), `dias` é o comprimento FIXO do ciclo atual (início do ciclo → próxima
+data de reset), não os dias decorridos — assim os limites não mudam durante o
+ciclo e o custo acumulado é monótono à medida que o consumo aumenta. No fecho
+do ciclo o comprimento fixo coincide com os dias do período, reproduzindo a
+fatura.
 
 Confirmado nas faturas:
 - 30 dias → limites 5 / 10 / 15 / 25 (sem alteração).
@@ -87,9 +92,12 @@ Divisão em unidades com responsabilidade única:
 - No dia de reset, captura a leitura atual do medidor como *baseline* e regista a
   data de início do ciclo.
 - `consumo_ciclo = total_atual − baseline`.
-- `dias_decorridos = max(1, hoje − início_ciclo)`.
-- Escalões prorrateados por `dias_decorridos`. No fecho do ciclo,
-  `dias_decorridos` iguala os dias do período, convergindo para a fatura.
+- `dias_decorridos = max(1, hoje − início_ciclo)` (apenas informativo/exibição).
+- `dias_ciclo = início_ciclo → próximo reset` (comprimento fixo do ciclo atual,
+  constante durante todo o ciclo).
+- Escalões prorrateados por `dias_ciclo` (fixo), não por `dias_decorridos` —
+  assim o custo acumulado é monótono no consumo dentro do ciclo. No fecho do
+  ciclo, `dias_ciclo` iguala os dias do período, reproduzindo a fatura.
 
 ## Motor de cálculo (`calculator.py`)
 
@@ -142,8 +150,11 @@ decorridos, escalão atual, detalhe por escalão.
   prorrateados) — reflete a cobrança da fatura.
 - **Energy → apontar ao `total_cost`** (rigoroso). O `marginal_price` é uma
   aproximação incremental dos escalões e não capta os encargos fixos.
-- **Proração por dias decorridos** durante o ciclo (estimativa em tempo real que
-  converge para a fatura no fecho).
+- **Proração pelo comprimento fixo do ciclo** (início do ciclo → próximo reset),
+  constante durante todo o ciclo, em vez de dias decorridos — garante que
+  `total_cost` é monótono (nunca diminui com o mesmo consumo) e continua a
+  coincidir com a fatura no fecho do ciclo, quando o comprimento fixo iguala os
+  dias do período.
 
 ## Testes
 
