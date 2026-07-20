@@ -224,6 +224,10 @@ class AgereCycleConsumptionSensor(_AgereBase):
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "m³"
+    # Show fractional m³ (litre precision) so partial usage is visible while it
+    # accrues. AGERE bills in whole m³, but this live sensor reflects the raw
+    # metered difference.
+    _attr_suggested_display_precision = 3
 
     def __init__(self, data: _AgereData) -> None:
         super().__init__(data)
@@ -234,8 +238,7 @@ class AgereCycleConsumptionSensor(_AgereBase):
     def native_value(self):
         if self._data.breakdown is None:
             return None
-        # integer m³ to match AGERE metering
-        return int(self._data.consumption)
+        return float(self._data.consumption)
 
 
 class AgereComponentCostSensor(_AgereBase):
