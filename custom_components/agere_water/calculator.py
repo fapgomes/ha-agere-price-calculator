@@ -48,3 +48,48 @@ def water_lines(consumo: Decimal, days: int, tariff: Tariff) -> list[TierLine]:
         qty = max(Decimal(0), cap - lo)
         lines.append(TierLine(i, qty, rate, money(qty * rate)))
     return lines
+
+
+@dataclass
+class Breakdown:
+    water: Decimal
+    sanitation: Decimal
+    waste: Decimal
+    taxes: Decimal
+    base_without_vat: Decimal
+    vat: Decimal
+    total: Decimal
+    lines: list[TierLine]
+
+
+def calcular(consumo: Decimal, days: int, config: CalcConfig) -> Breakdown:
+    """Compute the AGERE bill breakdown for the given cycle consumption and days."""
+    t = config.tariff
+    lines = water_lines(consumo, days, t)
+
+    # component subtotals (each line already rounded to cents)
+    water_consumption = sum((l.value for l in lines), Decimal(0))
+    water = (water_consumption + money(t.water_availability)) if config.include_water else Decimal(0)
+
+    san_drain = money(consumo * t.sanitation_drainage)
+    sanitation = (san_drain + money(t.sanitation_availability)) if config.include_sanitation else Decimal(0)
+
+    waste = (money(consumo * t.waste_variable) + money(t.waste_fixed)) if config.include_waste else Decimal(0)
+
+    tax_water = money(consumo * t.tax_water)
+    tax_sanit = money(consumo * t.tax_sanitation)
+    taxes = (tax_water + tax_sanit + money(t.tax_waste_mgmt)) if config.include_taxes else Decimal(0)
+
+    base = water + sanitation + waste + taxes
+
+    # VAT: water (all), sanitation (all), the two resource taxes. Never waste / waste-mgmt tax.
+    vat_base = Decimal(0)
+    if config.include_water:
+        vat_base += water
+    if config.include_sanitation:
+        vat_base += sanitation
+    if config.include_taxes:
+        vat_base += tax_water + tax_sanit
+    vat = money(vat_base * config.vat_rate) if config.include_vat else Decimal(0)
+
+    return Breakdown(water, sanitation, waste, taxes, money(base), vat, money(base + vat), lines)

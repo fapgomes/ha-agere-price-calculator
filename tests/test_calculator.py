@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from custom_components.agere_water.calculator import money, price4, tier_limits, water_lines
+from custom_components.agere_water.calculator import calcular, money, price4, tier_limits, water_lines
 from custom_components.agere_water.const import DEFAULT_TARIFF, CalcConfig
 
 
@@ -54,3 +54,54 @@ def test_water_lines_18m3_28days():
         Decimal("7.51"), Decimal("0.00"),
     ]
     assert sum(l.value for l in lines) == Decimal("17.00")
+
+
+def test_full_bill_28m3_30days():
+    bd = calcular(Decimal("28"), 30, CalcConfig())
+    assert bd.water == Decimal("41.85")
+    assert bd.sanitation == Decimal("18.35")
+    assert bd.waste == Decimal("2.94")
+    assert bd.taxes == Decimal("4.37")
+    assert bd.base_without_vat == Decimal("67.51")
+    assert bd.vat == Decimal("3.70")
+    assert bd.total == Decimal("71.21")
+
+
+def test_full_bill_18m3_28days():
+    bd = calcular(Decimal("18"), 28, CalcConfig())
+    assert bd.water == Decimal("21.86")
+    assert bd.sanitation == Decimal("13.54")
+    assert bd.waste == Decimal("2.79")
+    assert bd.taxes == Decimal("3.84")
+    assert bd.base_without_vat == Decimal("42.03")
+    assert bd.vat == Decimal("2.18")
+    assert bd.total == Decimal("44.21")
+
+
+def test_vat_excluded():
+    bd = calcular(Decimal("28"), 30, CalcConfig(include_vat=False))
+    assert bd.vat == Decimal("0.00")
+    assert bd.total == Decimal("67.51")
+
+
+def test_water_only_component():
+    bd = calcular(
+        Decimal("28"), 30,
+        CalcConfig(include_sanitation=False, include_waste=False, include_taxes=False),
+    )
+    assert bd.sanitation == Decimal("0")
+    assert bd.water == Decimal("41.85")
+    # VAT only on water: 41.85 * 0.06 = 2.511 -> 2.51
+    assert bd.vat == Decimal("2.51")
+    assert bd.total == Decimal("44.36")
+
+
+def test_waste_never_taxed():
+    # Waste-only, VAT on: waste is not subject to VAT, so vat must be 0.
+    bd = calcular(
+        Decimal("28"), 30,
+        CalcConfig(include_water=False, include_sanitation=False, include_taxes=False),
+    )
+    assert bd.waste == Decimal("2.94")
+    assert bd.vat == Decimal("0.00")
+    assert bd.total == Decimal("2.94")
