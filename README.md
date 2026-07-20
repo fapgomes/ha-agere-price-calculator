@@ -57,20 +57,47 @@ annually, so treat these values as a snapshot for 2026, not a permanent
 guarantee. Per-tariff-value editing in the UI is not yet exposed (see
 Limitations below); a tariff update currently requires a code change.
 
-## Installation
+## Installation / Deploy to Home Assistant
 
-### HACS (custom repository)
+The integration is a **custom component** — it lives in the
+`custom_components/` folder of your Home Assistant configuration directory
+(the folder that contains `configuration.yaml`). Depending on your install
+type that folder is typically:
 
-1. In HACS, open the overflow menu → **Custom repositories**.
-2. Add this repository's URL, category **Integration**.
-3. Find "AGERE Water Price" in HACS and install it.
-4. Restart Home Assistant.
+- **Home Assistant OS / Supervised**: `/config`
+- **Home Assistant Container (Docker)**: the host path you mounted at
+  `/config`
+- **Home Assistant Core (venv)**: `~/.homeassistant` (or your configured
+  directory)
 
-### Manual
+### Option A — HACS (recommended)
 
-1. Copy `custom_components/agere_water/` into your HA config directory, at
-   `config/custom_components/agere_water/`.
-2. Restart Home Assistant.
+1. In HACS, open the overflow menu (⋮) → **Custom repositories**.
+2. Add the repository URL
+   `https://github.com/fapgomes/ha-agere-price-calculator`, category
+   **Integration**, and confirm.
+3. Search for "AGERE Water Price" in HACS and click **Download**.
+4. **Restart Home Assistant** (Settings → System → Restart).
+
+### Option B — Manual deploy
+
+1. Get the files onto the HA host. Pick whichever you have:
+   - the **Samba** or **Studio Code Server** / **File editor** add-on, or
+   - `scp` / `rsync` over SSH, or
+   - `git clone https://github.com/fapgomes/ha-agere-price-calculator` on
+     the host and copy from there.
+2. Copy the folder `custom_components/agere_water/` into your config
+   directory so the result is:
+   `<config>/custom_components/agere_water/` (it must contain
+   `manifest.json`, `sensor.py`, `calculator.py`, etc.).
+   Example (Core/venv):
+   ```bash
+   cp -r custom_components/agere_water ~/.homeassistant/custom_components/
+   ```
+3. **Restart Home Assistant** so it picks up the new integration.
+
+After restarting (either option), continue with **Configuration** below to
+add the integration from the UI.
 
 ## Configuration
 
