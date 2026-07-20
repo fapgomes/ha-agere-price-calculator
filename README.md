@@ -175,3 +175,7 @@ invoices:
 - 28 m³ over 30 days → 71.21 € total.
 - 18 m³ over 28 days → 44.21 € total (tier limits prorated to 5/9/14/23 m³
   for the 28-day cycle).
+
+## License
+
+Released under the [GNU General Public License v3.0](LICENSE).
