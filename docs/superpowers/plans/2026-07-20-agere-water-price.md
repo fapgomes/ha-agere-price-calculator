@@ -28,6 +28,15 @@ Prorated tier limits: 30 days → [5,10,15,25]; 28 days → [5,9,14,23].
 
 ---
 
+## Environment note (local execution)
+
+This machine has only Python 3.11 and 3.14; Home Assistant needs 3.13. Decision: run **only the pure-engine tests (Tasks 2–6)** locally in a `pytest`-only venv. Tasks 7–8 are still implemented in full, but their HA-harness tests are not run here — they are validated on the user's real HA / CI later.
+
+- The local venv installs **only `pytest`** (not `pytest-homeassistant-custom-component`).
+- `conftest.py` loads the HA plugin **conditionally** so engine tests collect cleanly without it.
+- `test_config_flow.py` and `test_sensor.py` start with `pytest.importorskip("pytest_homeassistant_custom_component")` so the full-suite `pytest` run skips them cleanly instead of erroring at import.
+- For Tasks 7–8, "verify tests pass" locally means: `pytest -q` runs green with the HA modules **skipped**, and `python -c "import ast; ast.parse(open(f).read())"` confirms each new module parses. Real red→green happens on the user's HA.
+
 ## File Structure
 
 ```
@@ -71,17 +80,17 @@ README.md
 
 - [ ] **Step 1: Create the venv and test requirements**
 
-`requirements_test.txt`:
+`requirements_test.txt` (records the full set needed for the HA-harness tests in a proper 3.13 environment / CI):
 ```
 pytest
 pytest-homeassistant-custom-component
 ```
 
-Run:
+Local venv installs **only pytest** (see Environment note — this box has no Python 3.13, so the HA harness is not installed here):
 ```bash
-python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements_test.txt
+python3.11 -m venv .venv && . .venv/bin/activate && pip install pytest
 ```
-Expected: installs pytest and pulls a matching `homeassistant`. (This is a project-local venv, not a system package install.)
+Expected: pytest installs cleanly. Do NOT `pip install -r requirements_test.txt` locally — it would pull `homeassistant`, which needs 3.13.
 
 - [ ] **Step 2: Write `manifest.json`**
 
@@ -189,16 +198,29 @@ DEFAULT_TARIFF = Tariff()
 - [ ] **Step 5: Write `tests/conftest.py`**
 
 ```python
-"""Shared test fixtures."""
+"""Shared test fixtures.
+
+The Home Assistant test harness (pytest-homeassistant-custom-component) is only
+present in a Python 3.13 environment / CI. When absent, engine tests
+(test_calculator, test_cycle) still collect and run — the HA plugin and its
+autouse fixture load only when the plugin is importable.
+"""
 import pytest
 
-pytest_plugins = ["pytest_homeassistant_custom_component"]
+try:
+    import pytest_homeassistant_custom_component  # noqa: F401
 
+    _HAS_HA_HARNESS = True
+except ImportError:
+    _HAS_HA_HARNESS = False
 
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
-    """Enable loading custom integrations in all tests."""
-    yield
+if _HAS_HA_HARNESS:
+    pytest_plugins = ["pytest_homeassistant_custom_component"]
+
+    @pytest.fixture(autouse=True)
+    def auto_enable_custom_integrations(enable_custom_integrations):
+        """Enable loading custom integrations in all tests."""
+        yield
 ```
 
 - [ ] **Step 6: Write the first test in `tests/test_calculator.py`**
@@ -790,6 +812,10 @@ git commit -m "feat: add billing-cycle manager"
 - [ ] **Step 1: Write failing test**
 
 ```python
+import pytest
+
+pytest.importorskip("pytest_homeassistant_custom_component")
+
 from homeassistant import config_entries, data_entry_flow
 from homeassistant.core import HomeAssistant
 
@@ -816,7 +842,7 @@ async def test_user_flow_creates_entry(hass: HomeAssistant):
 - [ ] **Step 2: Run to verify failure**
 
 Run: `pytest tests/test_config_flow.py -v`
-Expected: FAIL (no config flow registered / import error).
+Expected (local, no HA harness): the module is **skipped** via `importorskip`. That is the expected local state — red→green for this test runs on the user's HA / CI. Proceed to implement.
 
 - [ ] **Step 3: Implement `config_flow.py`**
 
@@ -963,10 +989,15 @@ Both files identical content:
 }
 ```
 
-- [ ] **Step 6: Run to verify pass**
+- [ ] **Step 6: Verify locally (HA harness absent)**
 
-Run: `pytest tests/test_config_flow.py -v`
-Expected: passed.
+Run: `pytest -q`
+Expected: engine tests pass; `test_config_flow.py` shows as **skipped** (not errored).
+Also confirm each new module parses:
+```bash
+for f in custom_components/agere_water/__init__.py custom_components/agere_water/config_flow.py; do python -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$f" && echo "OK $f"; done
+```
+Expected: `OK` for both. And `python -c "import json; json.load(open('custom_components/agere_water/strings.json')); json.load(open('custom_components/agere_water/translations/en.json'))"` exits 0.
 
 - [ ] **Step 7: Commit**
 
@@ -993,6 +1024,9 @@ git commit -m "feat: add config flow, options flow, and entry setup"
 from decimal import Decimal
 
 import pytest
+
+pytest.importorskip("pytest_homeassistant_custom_component")
+
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -1041,7 +1075,7 @@ async def test_total_cost_recomputes_on_source_change(hass: HomeAssistant):
 - [ ] **Step 2: Run to verify failure**
 
 Run: `pytest tests/test_sensor.py -v`
-Expected: FAIL (no sensor platform / import error).
+Expected (local, no HA harness): the module is **skipped** via `importorskip`. That is the expected local state — red→green for this test runs on the user's HA / CI. Proceed to implement.
 
 - [ ] **Step 3: Implement `sensor.py`**
 
@@ -1279,15 +1313,20 @@ class AgereComponentCostSensor(_AgereBase):
         return float(getattr(bd, self._attr)) if bd else None
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [ ] **Step 4: Verify locally (HA harness absent)**
 
-Run: `pytest tests/test_sensor.py -v`
-Expected: passed. (If `cycle_consumption` state assertion fails on formatting, confirm it renders as `"28"`.)
+Run: `pytest -q`
+Expected: engine tests pass; `test_sensor.py` shows as **skipped** (not errored).
+Confirm the module parses:
+```bash
+python -c "import ast; ast.parse(open('custom_components/agere_water/sensor.py').read())" && echo OK
+```
+Expected: `OK`.
 
 - [ ] **Step 5: Run the full suite**
 
-Run: `pytest -v`
-Expected: all passed.
+Run: `pytest -q`
+Expected: all engine tests pass (Tasks 1–6); `test_config_flow.py` and `test_sensor.py` skipped. Zero failures, zero errors.
 
 - [ ] **Step 6: Commit**
 
