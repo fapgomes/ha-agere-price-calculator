@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-07-20
+
+### Changed
+- `sensor.agere_cycle_consumption` now reports fractional m³ (litre precision,
+  3 decimals) instead of truncating to whole m³, so partial usage is visible
+  as it accrues. Cost calculations were already based on the fractional value;
+  only the displayed consumption changed.
+
 ## [0.1.0] - 2026-07-20
 
 Initial release.
@@ -36,4 +44,5 @@ Initial release.
 - Editing tariff values from the UI is not yet exposed; a tariff update
   requires a code change (AGERE updates its tariff annually).
 
+[0.1.1]: https://github.com/fapgomes/ha-agere-price-calculator/releases/tag/v0.1.1
 [0.1.0]: https://github.com/fapgomes/ha-agere-price-calculator/releases/tag/v0.1.0
