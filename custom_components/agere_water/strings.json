@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "AGERE Water Price",
+        "description": "Pick the water-meter sensor (m³) and the billing-cycle reset day.",
+        "data": {
+          "source_entity": "Water meter sensor (m³)",
+          "reset_day": "Billing-cycle reset day (1-28)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AGERE Water Price options",
+        "data": {
+          "reset_day": "Billing-cycle reset day (1-28)",
+          "enable_water": "Include water charges",
+          "enable_sanitation": "Include sanitation charges",
+          "enable_waste": "Include waste charges",
+          "enable_taxes": "Include state taxes",
+          "include_vat": "Include VAT",
+          "vat_rate": "VAT rate (e.g. 0.06)"
+        }
+      }
+    }
+  }
+}
