@@ -933,10 +933,13 @@ class AgereWaterOptionsFlow(config_entries.OptionsFlow):
 """AGERE Water Price integration."""
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from typing import TYPE_CHECKING
 
-from .const import DOMAIN, PLATFORMS
+from .const import PLATFORMS
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -952,6 +955,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
 ```
+
+**Why `TYPE_CHECKING`:** this package's `__init__.py` is executed by Python whenever *any* submodule is imported — including `calculator`/`const` from the pure-engine tests. In the local (HA-less) environment a top-level `from homeassistant... import ...` here would make the engine tests fail at collection. `ConfigEntry`/`HomeAssistant` are used only as annotations, so importing them under `TYPE_CHECKING` (with `from __future__ import annotations` keeping the hints as strings) means `__init__.py` has **no runtime Home Assistant dependency** — engine tests collect cleanly, and real HA still resolves the hints. `config_flow.py`/`sensor.py` keep their normal top-level HA imports because they are never imported at package load — only by their `importorskip`-guarded tests (skipped locally) and by HA at runtime.
 
 - [ ] **Step 5: Write `strings.json` and `translations/en.json`**
 
