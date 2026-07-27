@@ -23,6 +23,3 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # agere_water is a custom integration, not submitted to the HACS
-          # default store, so it isn't registered in home-assistant/brands.
-          ignore: brands
