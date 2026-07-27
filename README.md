@@ -1,5 +1,7 @@
 # AGERE Water Price
 
+<img src="custom_components/agere_water/brand/logo.png" alt="AGERE Water Price" width="317">
+
 A Home Assistant custom integration that turns a water-meter reading (m³)
 into real AGERE Doméstico (Braga) billing costs — tiered water price, fixed
 availability/drainage charges, waste, government taxes, and VAT — so you can
