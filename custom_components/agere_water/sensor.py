@@ -1,28 +1,33 @@
 """Sensor platform for AGERE Water Price."""
 from __future__ import annotations
 
-from datetime import date
+import logging
 from decimal import Decimal, InvalidOperation
 
 from homeassistant.components.sensor import (
     SensorDeviceClass, SensorEntity, SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
-from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .calculator import calcular, marginal_price
 from .const import (
-    CONF_INCLUDE_VAT, CONF_RESET_DAY, CONF_SANITATION, CONF_SOURCE,
-    CONF_TAXES, CONF_VAT_RATE, CONF_WASTE, CONF_WATER, DEFAULT_RESET_DAY,
-    DEFAULT_VAT_RATE, DOMAIN, CalcConfig, Tariff,
+    CONF_INCLUDE_VAT, CONF_READINGS, CONF_SANITATION, CONF_SOURCE, CONF_TAXES,
+    CONF_VAT_RATE, CONF_WASTE, CONF_WATER, DEFAULT_VAT_RATE, DOMAIN,
+    CalcConfig, Tariff,
 )
-from .cycle import CycleManager, CycleState
+from .entry_options import (
+    next_reading_date_from_options, readings_from_options, readings_to_options,
+)
+from .readings import (
+    SOURCE_AUTO, Cycle, Reading, ReadingLog, days_elapsed, is_overdue,
+)
 
-_STORE_VERSION = 1
+_LOGGER = logging.getLogger(__name__)
 
 
 def _calc_config(options: dict) -> CalcConfig:
@@ -42,40 +47,35 @@ def _calc_config(options: dict) -> CalcConfig:
 
 
 class _AgereData:
-    """Owns cycle state, persistence, and the latest computed breakdown."""
+    """Owns the reading log and the latest computed breakdowns."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
         self.source = entry.data[CONF_SOURCE]
         self.config = _calc_config(dict(entry.options))
-        reset_day = int(entry.options.get(CONF_RESET_DAY, DEFAULT_RESET_DAY))
-        self._store = Store(hass, _STORE_VERSION, f"{DOMAIN}_{entry.entry_id}")
-        self._manager = CycleManager(reset_day)
+        try:
+            self.log = readings_from_options(entry.options)
+        except ValueError as err:
+            _LOGGER.error(
+                "Stored AGERE readings are invalid (%s); starting from an empty "
+                "log. Fix them in Settings -> Devices & Services -> AGERE -> "
+                "Configure -> Readings", err,
+            )
+            self.log = ReadingLog()
+        try:
+            self.next_reading_date = next_reading_date_from_options(entry.options)
+        except ValueError:
+            _LOGGER.error("Stored next reading date is invalid; ignoring it")
+            self.next_reading_date = None
+        self.cycle: Cycle | None = None
         self.breakdown = None
+        self.closed: list[tuple] = []
         self.marginal = Decimal("0")
-        self.consumption = Decimal("0")
         self.days_elapsed = 0
-        self.cycle_days = 0
+        self.overdue = False
+        self._seeding = False
         self._listeners: list = []
-
-    async def async_load(self) -> None:
-        stored = await self._store.async_load()
-        if stored:
-            self._manager = CycleManager(
-                self._manager.reset_day,
-                CycleState(
-                    cycle_start=date.fromisoformat(stored["cycle_start"]),
-                    baseline=Decimal(stored["baseline"]),
-                ),
-            )
-
-    async def _async_save(self) -> None:
-        st = self._manager.state
-        if st is not None:
-            await self._store.async_save(
-                {"cycle_start": st.cycle_start.isoformat(), "baseline": str(st.baseline)}
-            )
 
     def add_listener(self, cb) -> None:
         self._listeners.append(cb)
@@ -89,28 +89,52 @@ class _AgereData:
             meter_total = Decimal(state.state)
         except InvalidOperation:
             return
+
+        if len(self.log) == 0:
+            self._seed(meter_total)
+            return
+
         today = dt_util.now().date()
-        prev = self._manager.state
-        self._manager.update(today, meter_total)
-        self.consumption = self._manager.consumption(meter_total)
-        self.days_elapsed = self._manager.days_elapsed(today)
-        self.cycle_days = self._manager.cycle_length_days()
-        self.breakdown = calcular(self.consumption, self.cycle_days, self.config)
-        self.marginal = marginal_price(self.consumption, self.cycle_days, self.config)
-        if self._manager.state is not prev:
-            self.hass.async_create_task(self._async_save())
+        self.cycle = self.log.current_cycle(meter_total, self.next_reading_date)
+        self.days_elapsed = days_elapsed(self.cycle, today)
+        self.overdue = is_overdue(self.cycle, today)
+        self.breakdown = calcular(self.cycle.consumption, self.cycle.days, self.config)
+        self.marginal = marginal_price(
+            self.cycle.consumption, self.cycle.days, self.config
+        )
+        self.closed = [
+            (c, calcular(c.consumption, c.days, self.config))
+            for c in self.log.closed_cycles()
+        ]
         for cb in self._listeners:
             cb()
+
+    def _seed(self, meter_total: Decimal) -> None:
+        """Write the first reading so later cycles have a starting point.
+
+        Reproduces the previous behaviour: the first cycle is partial, because
+        the baseline is captured now rather than at the real cycle start. The
+        user replaces it with the reading from their latest invoice.
+        """
+        if self._seeding:
+            return
+        self._seeding = True
+        seeded = ReadingLog([Reading(dt_util.now().date(), meter_total, SOURCE_AUTO)])
+        options = {**self.entry.options, CONF_READINGS: readings_to_options(seeded)}
+        self.hass.async_create_task(self._async_write_options(options))
+
+    async def _async_write_options(self, options: dict) -> None:
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     data = _AgereData(hass, entry)
-    await data.async_load()
 
     entities: list[SensorEntity] = [
         AgereTotalCostSensor(data),
         AgereMarginalPriceSensor(data),
         AgereCycleConsumptionSensor(data),
+        AgereLastInvoiceSensor(data),
     ]
     for key, attr, name in (
         (CONF_WATER, "water", "Water cost"),
@@ -176,19 +200,28 @@ class AgereTotalCostSensor(_AgereBase):
     @property
     def extra_state_attributes(self):
         bd = self._data.breakdown
-        if not bd:
+        cycle = self._data.cycle
+        if not bd or cycle is None:
             return None
         active_tiers = [line.index + 1 for line in bd.lines if line.qty > 0]
         return {
             "base_without_vat": float(bd.base_without_vat),
             "vat": float(bd.vat),
-            "cycle_consumption_m3": float(self._data.consumption),
+            "cycle_consumption_m3": float(cycle.consumption),
             "water": float(bd.water),
             "sanitation": float(bd.sanitation),
             "waste": float(bd.waste),
             "taxes": float(bd.taxes),
             "days_elapsed": self._data.days_elapsed,
-            "billing_days": self._data.cycle_days,
+            "billing_days": cycle.days,
+            "billing_days_estimated": cycle.estimated,
+            "cycle_start": cycle.start.isoformat(),
+            "cycle_end": cycle.end.isoformat(),
+            "cycle_overdue": self._data.overdue,
+            "next_reading_date": (
+                self._data.next_reading_date.isoformat()
+                if self._data.next_reading_date else None
+            ),
             "current_tier": active_tiers[-1] if active_tiers else 1,
             "tiers": [
                 {
@@ -236,9 +269,9 @@ class AgereCycleConsumptionSensor(_AgereBase):
 
     @property
     def native_value(self):
-        if self._data.breakdown is None:
+        if self._data.cycle is None:
             return None
-        return float(self._data.consumption)
+        return float(self._data.cycle.consumption)
 
 
 class AgereComponentCostSensor(_AgereBase):
@@ -257,3 +290,39 @@ class AgereComponentCostSensor(_AgereBase):
     def native_value(self):
         bd = self._data.breakdown
         return float(getattr(bd, self._attr)) if bd else None
+
+
+class AgereLastInvoiceSensor(_AgereBase):
+    """Total of the most recent CLOSED cycle, plus the full derived history."""
+
+    _attr_name = "AGERE last invoice"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "EUR"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, data: _AgereData) -> None:
+        super().__init__(data)
+        self._attr_unique_id = f"{data.entry.entry_id}_last_invoice"
+        self.entity_id = "sensor.agere_last_invoice"
+
+    @property
+    def native_value(self):
+        if not self._data.closed:
+            return None
+        return float(self._data.closed[-1][1].total)
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "cycles": [
+                {
+                    "start": cycle.start.isoformat(),
+                    "end": cycle.end.isoformat(),
+                    "days": cycle.days,
+                    "m3": float(cycle.consumption),
+                    "total": float(bd.total),
+                }
+                for cycle, bd in self._data.closed
+            ],
+            "readings": readings_to_options(self._data.log),
+        }
