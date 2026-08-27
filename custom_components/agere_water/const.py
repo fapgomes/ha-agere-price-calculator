@@ -9,7 +9,6 @@ PLATFORMS = ["sensor"]
 
 # --- config entry keys ---
 CONF_SOURCE = "source_entity"
-CONF_RESET_DAY = "reset_day"
 CONF_INCLUDE_VAT = "include_vat"
 CONF_VAT_RATE = "vat_rate"
 CONF_WATER = "enable_water"
@@ -32,7 +31,6 @@ CONF_TAX_SANITATION = "tax_sanitation"
 CONF_TAX_WASTE_MGMT = "tax_waste_mgmt"
 
 DEFAULT_VAT_RATE = Decimal("0.06")
-DEFAULT_RESET_DAY = 13
 
 
 @dataclass(frozen=True)

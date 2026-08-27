@@ -3,10 +3,9 @@
     "step": {
       "user": {
         "title": "AGERE Water Price",
-        "description": "Pick the water-meter sensor (m³) and the billing-cycle reset day.",
+        "description": "Pick the water-meter sensor reporting cumulative consumption in m³. Billing periods come from meter readings, which you add afterwards under Configure.",
         "data": {
-          "source_entity": "Water meter sensor (m³)",
-          "reset_day": "Billing-cycle reset day (1-28)"
+          "source_entity": "Water meter sensor (m³)"
         }
       }
     }
@@ -14,9 +13,40 @@
   "options": {
     "step": {
       "init": {
-        "title": "AGERE Water Price options",
+        "title": "AGERE Water Price",
+        "menu_options": {
+          "readings": "Readings",
+          "next_reading": "Next reading date",
+          "components": "Charges and VAT"
+        }
+      },
+      "readings": {
+        "title": "Readings",
+        "description": "Each reading is the END of a billing period — the 'Leitura' date on your invoice, not the invoice date. Pick one to edit or delete it.",
         "data": {
-          "reset_day": "Billing-cycle reset day (1-28)",
+          "reading": "Reading"
+        }
+      },
+      "reading_edit": {
+        "title": "Reading",
+        "description": "Date of the meter reading (end of the billing period) and the meter value in m³, both as printed on the AGERE invoice.",
+        "data": {
+          "date": "Reading date (end of billing period)",
+          "m3": "Meter reading (m³)",
+          "delete": "Delete this reading"
+        }
+      },
+      "next_reading": {
+        "title": "Next reading date",
+        "description": "When the current period closes — the 'Período de Comunicação' date on your invoice. Without it, the period length is estimated from the previous one.",
+        "data": {
+          "date": "Next reading date",
+          "clear": "Clear and estimate instead"
+        }
+      },
+      "components": {
+        "title": "Charges and VAT",
+        "data": {
           "enable_water": "Include water charges",
           "enable_sanitation": "Include sanitation charges",
           "enable_waste": "Include waste charges",
@@ -25,6 +55,9 @@
           "vat_rate": "VAT rate (e.g. 0.06)"
         }
       }
+    },
+    "error": {
+      "invalid_reading": "Invalid reading: dates must stay in order and meter values must not decrease."
     }
   }
 }
