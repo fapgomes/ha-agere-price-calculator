@@ -132,3 +132,29 @@ def test_marginal_price_full_with_vat():
     # tier 0 water 0.5080 + drainage 0.4809 + tax_water 0.0382 + tax_sanit 0.0150 = 1.0421
     # subject *1.06 = 1.104626 ; + waste_variable 0.0147 (no VAT) = 1.119326 -> 1.1193
     assert marginal_price(Decimal("0"), 30, cfg) == Decimal("1.1193")
+
+
+def test_tier_limits_33_days_prorated():
+    # 15 * 33/30 = 16.5 -> 17 (half up, matching AGERE's own proration)
+    assert tier_limits(33, (5, 10, 15, 25)) == [6, 11, 17, 28]
+
+
+def test_water_lines_20m3_33days():
+    lines = water_lines(Decimal("20"), 33, DEFAULT_TARIFF)
+    assert [l.qty for l in lines] == [Decimal(x) for x in (6, 5, 6, 3, 0)]
+    assert [l.value for l in lines] == [
+        Decimal("3.05"), Decimal("3.32"), Decimal("5.16"),
+        Decimal("5.63"), Decimal("0.00"),
+    ]
+
+
+def test_full_bill_20m3_33days():
+    """Invoice 042.DP.26080422002962699, period 2026-07-11 ~ 2026-08-12."""
+    bd = calcular(Decimal("20"), 33, CalcConfig())
+    assert bd.water == Decimal("22.02")
+    assert bd.sanitation == Decimal("14.50")
+    assert bd.waste == Decimal("2.82")
+    assert bd.taxes == Decimal("3.94")
+    assert bd.base_without_vat == Decimal("43.28")
+    assert bd.vat == Decimal("2.25")
+    assert bd.total == Decimal("45.53")
