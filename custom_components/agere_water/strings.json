@@ -59,5 +59,53 @@
     "error": {
       "invalid_reading": "Invalid reading: dates must stay in order and meter values must not decrease."
     }
+  },
+  "services": {
+    "set_reading": {
+      "name": "Set meter reading",
+      "description": "Adds or replaces a meter reading. The date is the END of the billing period — the 'Leitura' date on the AGERE invoice, not the invoice date.",
+      "fields": {
+        "date": {
+          "name": "Reading date",
+          "description": "End of the billing period, as printed on the invoice."
+        },
+        "m3": {
+          "name": "Meter reading (m³)",
+          "description": "Meter value from the invoice. Leave empty to take it from the meter sensor's recorded history on that date."
+        },
+        "config_entry": {
+          "name": "Integration entry",
+          "description": "Which AGERE entry to update. Only needed with more than one."
+        }
+      }
+    },
+    "remove_reading": {
+      "name": "Remove meter reading",
+      "description": "Deletes the reading with this date from the log.",
+      "fields": {
+        "date": {
+          "name": "Reading date",
+          "description": "Date of the reading to delete."
+        },
+        "config_entry": {
+          "name": "Integration entry",
+          "description": "Which AGERE entry to update. Only needed with more than one."
+        }
+      }
+    },
+    "set_next_reading_date": {
+      "name": "Set next reading date",
+      "description": "Sets when the current billing period closes — the 'Período de Comunicação' date on the invoice. Leave the date empty to clear it and estimate from the previous period.",
+      "fields": {
+        "date": {
+          "name": "Next reading date",
+          "description": "When the current period closes. Empty clears it."
+        },
+        "config_entry": {
+          "name": "Integration entry",
+          "description": "Which AGERE entry to update. Only needed with more than one."
+        }
+      }
+    }
   }
 }

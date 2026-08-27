@@ -1,0 +1,47 @@
+set_reading:
+  fields:
+    date:
+      required: true
+      example: "2026-08-12"
+      selector:
+        date:
+    m3:
+      required: false
+      example: 2631
+      selector:
+        number:
+          min: 0
+          step: 0.001
+          mode: box
+          unit_of_measurement: "m³"
+    config_entry:
+      required: false
+      selector:
+        config_entry:
+          integration: agere_water
+
+remove_reading:
+  fields:
+    date:
+      required: true
+      example: "2026-08-12"
+      selector:
+        date:
+    config_entry:
+      required: false
+      selector:
+        config_entry:
+          integration: agere_water
+
+set_next_reading_date:
+  fields:
+    date:
+      required: false
+      example: "2026-09-03"
+      selector:
+        date:
+    config_entry:
+      required: false
+      selector:
+        config_entry:
+          integration: agere_water

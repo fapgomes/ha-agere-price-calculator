@@ -19,6 +19,12 @@ _LEGACY_RESET_DAY = "reset_day"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    # Imported lazily: this package's __init__ must stay importable without
+    # Home Assistant, so the pure engine tests can run standalone.
+    from .services import SERVICE_SET_READING, async_setup_services
+
+    if not hass.services.has_service(DOMAIN, SERVICE_SET_READING):
+        async_setup_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
