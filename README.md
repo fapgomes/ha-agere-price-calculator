@@ -16,10 +16,10 @@ a flat €/m³ price: it's a set of consumption tiers, fixed period charges,
 non-taxed waste fees, and government taxes, with 6% VAT applied to some
 components but not others. A single "price per m³" can't represent that.
 
-This integration tracks your billing cycle (a configurable reset day each
-month), computes the AGERE bill breakdown for the consumption in the current
-cycle, and exposes it as sensors — including a running total-cost sensor
-that matches what AGERE actually bills, to the cent.
+This integration tracks your billing period (derived from the meter readings
+on your invoices), computes the AGERE bill breakdown for the consumption in
+the current period, and exposes it as sensors — including a running
+total-cost sensor that matches what AGERE actually bills, to the cent.
 
 ## Tariff (2026 Doméstico defaults)
 
@@ -44,15 +44,15 @@ sanitation (drainage + availability), and the two resource taxes. It never
 applies to waste (variable, fixed, or the waste-management tax) — that
 exemption comes from Portuguese law (art. 2, nº2 CIVA).
 
-The water tier *limits* (5/10/15/25 m³) are for a 30-day cycle and are
-prorated by the fixed length of your current billing cycle (cycle start →
-next reset day), not by days elapsed so far
-(`round(limit × cycle_length_days / 30)`), matching how AGERE bills cycles
-that aren't exactly 30 days. Because the cycle length is constant all cycle
-long, `total_cost` only ever increases with consumption within a cycle
-(resetting at each new billing cycle) — it never shrinks as the cycle ages.
-Fixed charges (availability, waste fixed, waste-management tax) are billed in
-full per cycle, not prorated.
+The water tier *limits* (5/10/15/25 m³) are for a 30-day period and are
+prorated by the length of the billing period (`round(limit × days / 30)`),
+matching how AGERE bills periods that aren't exactly 30 days. On the 33-day
+period above the limits become 6/11/17/28 m³ — exactly the split printed on
+the invoice. The length is fixed for the whole period, never the days elapsed
+so far, so `total_cost` only ever increases with consumption within a period
+(resetting at each new one) and never shrinks as the period ages. Fixed
+charges (availability, waste fixed, waste-management tax) are billed in full
+per period, not prorated.
 
 These are the integration's built-in *defaults* — AGERE updates its tariff
 annually, so treat these values as a snapshot for 2026, not a permanent
@@ -133,18 +133,81 @@ add the integration from the UI.
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=agere_water)
 
 Or go to **Settings → Devices & Services → Add Integration**, search for
-"AGERE Water Price", and set:
+"AGERE Water Price", and pick:
 
 - **Source entity** — the sensor providing your cumulative water-meter
   reading in m³.
-- **Reset day** — the day of the month (1–28) your AGERE billing cycle
-  resets.
+
+That is all the setup form asks. Billing periods come from meter readings,
+which you add next.
+
+### Billing periods
+
+AGERE does not bill on a fixed day of the month — it bills **between meter
+reading dates**, and those drift. Three consecutive invoices gave periods of
+28, 33 and ~22 days. The integration therefore derives each period from the
+readings you enter, one per invoice.
+
+> **The date to enter is the END of the billing period** — the `Leitura` date
+> (equivalently, the end of `Período Faturação`), **not** the invoice date.
+> On a 2026-08-13 invoice covering `2026-07-11 ~ 2026-08-12`, the date is
+> `2026-08-12`. A day's difference shifts the period length and can move a
+> consumption tier.
+
+**Interactive editing** — **Configure** on the integration entry →
+**Readings**. The list shows each stored reading with the period it produces,
+and you can add, edit or delete any of them, including past months:
+
+```
+2026-08-12 · 2631 m³ · 33 d · 20 m³
+2026-07-10 · 2611 m³ · 28 d · 18 m³
+➕ New reading
+```
+
+**Configure → Next reading date** takes the *Período de Comunicação* date
+from your invoice, so the period in progress has an exact length instead of
+one estimated from the previous period.
+
+**Bulk entry from past invoices** — **Developer tools → Actions**, in YAML
+mode, one call per invoice:
+
+```yaml
+action: agere_water.set_reading
+data:
+  date: "2026-08-12"
+  m3: 2631
+```
+
+The action returns the recomputed period, so you can compare it against the
+invoice on the spot:
+
+```yaml
+cycle:
+  start: "2026-07-11"
+  end: "2026-08-12"
+  days: 33
+  consumption_m3: 20
+  total: 45.53
+  water: 22.02
+  sanitation: 14.5
+  waste: 2.82
+  taxes: 3.94
+  vat: 2.25
+```
+
+Leave `m3` out and the meter value is taken from the source sensor's recorded
+history for that date; supply it (from the invoice) when the history does not
+go back that far, or to match AGERE's own reading exactly.
+
+Two more actions round it out: `agere_water.remove_reading` (field: `date`)
+and `agere_water.set_next_reading_date` (field: `date`, empty to clear). All
+three take an optional `config_entry`, needed only if you run more than one
+AGERE entry.
 
 ### Options
 
-Available afterwards via **Configure** on the integration entry:
+Available via **Configure → Charges and VAT** on the integration entry:
 
-- **Reset day** — the billing-cycle reset day (1–28).
 - **Enable water / sanitation / waste / taxes** — independent toggles for
   each tariff component; disabled components are excluded from the total
   and from VAT.
@@ -155,13 +218,14 @@ Available afterwards via **Configure** on the integration entry:
 
 | Entity ID | Description |
 |---|---|
-| `sensor.agere_total_cost` | Running total cost (EUR) for the current billing cycle — all enabled components plus VAT. Attributes include the base (pre-VAT), the VAT amount, cycle consumption, and each component's cost. |
+| `sensor.agere_total_cost` | Running total cost (EUR) for the current billing period — all enabled components plus VAT. Attributes include the base (pre-VAT), the VAT amount, period consumption, each component's cost, and the period itself: `cycle_start`, `cycle_end`, `billing_days`, `billing_days_estimated`, `cycle_overdue`, `next_reading_date`. |
 | `sensor.agere_marginal_price` | Cost of the next cubic metre (EUR/m³) at the current point in the cycle — the active water tier's rate plus any enabled variable components and VAT. |
 | `sensor.agere_cycle_consumption` | Consumption (m³) accumulated so far in the current billing cycle. |
 | `sensor.agere_water_cost` | Water sub-cost (tiers + availability), when water is enabled. |
 | `sensor.agere_sanitation_cost` | Sanitation sub-cost (drainage + availability), when sanitation is enabled. |
 | `sensor.agere_waste_cost` | Waste sub-cost (variable + fixed, never VAT), when waste is enabled. |
 | `sensor.agere_taxes_cost` | Government-taxes sub-cost, when taxes is enabled. |
+| `sensor.agere_last_invoice` | Total (EUR) of the most recent **closed** billing period. Attributes list every derived period (start, end, days, m³, total) and the reading log itself. Diagnostic entity. |
 
 Per-component sensors are only created for components that are enabled in
 the options.
@@ -177,22 +241,34 @@ but it is only an incremental approximation of the active water tier — it
 does **not** include the fixed availability/waste/tax charges billed per
 cycle. Prefer `sensor.agere_total_cost` for accurate costs.
 
-## Known limitation
+## Known limitations
 
-The first billing cycle after installing the integration is partial: the
+The first billing period after installing the integration is partial: the
 consumption baseline is captured at install time (or first restart), not at
-the actual start of your current AGERE cycle. As a result, that first cycle
-under-reports consumption and cost until the next reset-day boundary, after
-which tracking is accurate for every full cycle.
+the real start of your current AGERE period. **Entering the reading from your
+latest invoice fixes it** — the period then starts where AGERE says it does.
+
+Two caveats remain for the period in progress:
+
+- Without a **next reading date**, its length is estimated from the previous
+  period. The `billing_days_estimated` attribute flags this; set the next
+  reading date to make it exact.
+- If the period runs past its expected end with no new reading, its length
+  **freezes** rather than stretching to today (flagged by `cycle_overdue`).
+  Stretching it would widen the consumption tiers mid-period and make the
+  running total go *down*, which the Energy dashboard would read as a meter
+  replacement.
 
 ## Accuracy
 
-The calculation engine is validated to the cent against two real AGERE
+The calculation engine is validated to the cent against three real AGERE
 invoices:
 
 - 28 m³ over 30 days → 71.21 € total.
 - 18 m³ over 28 days → 44.21 € total (tier limits prorated to 5/9/14/23 m³
-  for the 28-day cycle).
+  for the 28-day period).
+- 20 m³ over 33 days → 45.53 € total (tier limits prorated to 6/11/17/28 m³
+  for the 33-day period).
 
 ## License
 

@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Breaking:** billing periods now come from meter readings instead of a fixed
+  reset day, matching AGERE's own read-to-read periods. Existing entries migrate
+  automatically: the previous cycle boundary and baseline are converted into an
+  equivalent reading, so no consumption is lost.
+
+### Added
+- Reading log with `agere_water.set_reading`, `agere_water.remove_reading` and
+  `agere_water.set_next_reading_date` services, and a Readings section under the
+  integration's Configure menu for editing past periods.
+- `sensor.agere_last_invoice`, exposing every reconstructed billing period.
+- Test suite now runs in CI on Python 3.13.
+
+### Fixed
+- Period length no longer assumes a calendar month. On invoice
+  042.DP.26080422002962699 (20 m³ over 33 days) the computed total was 46.99 €
+  against 45.53 € billed; it is now exact.
+
 ## [0.1.2] - 2026-07-27
 
 ### Added
