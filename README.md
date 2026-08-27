@@ -74,7 +74,10 @@ type that folder is typically:
 
 ### Option A — HACS (recommended)
 
-**One-click:** open this repository in your Home Assistant's HACS (requires
+The integration is included in the **HACS default repositories**, so there is
+nothing to add manually — just search for it in HACS.
+
+**One-click:** open the integration in your Home Assistant's HACS (requires
 HACS installed):
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fapgomes&repository=ha-agere-price-calculator&category=integration)
@@ -83,12 +86,25 @@ Then click **Download**, and **restart Home Assistant**.
 
 Or manually:
 
+1. Open **HACS** in Home Assistant.
+2. Search for "AGERE Water Price" and open it.
+3. Click **Download**.
+4. **Restart Home Assistant** (Settings → System → Restart).
+
+<details>
+<summary>Optional — add as a custom repository</summary>
+
+Only needed if your HACS hasn't picked up the default repository list yet, or
+if you want to track a branch other than the released versions:
+
 1. In HACS, open the overflow menu (⋮) → **Custom repositories**.
 2. Add the repository URL
    `https://github.com/fapgomes/ha-agere-price-calculator`, category
    **Integration**, and confirm.
 3. Search for "AGERE Water Price" in HACS and click **Download**.
 4. **Restart Home Assistant** (Settings → System → Restart).
+
+</details>
 
 ### Option B — Manual deploy
 
