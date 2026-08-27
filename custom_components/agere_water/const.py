@@ -16,6 +16,8 @@ CONF_WATER = "enable_water"
 CONF_SANITATION = "enable_sanitation"
 CONF_WASTE = "enable_waste"
 CONF_TAXES = "enable_taxes"
+CONF_READINGS = "readings"
+CONF_NEXT_READING_DATE = "next_reading_date"
 
 # tariff override keys (stored as strings in options, parsed to Decimal)
 CONF_WATER_TIER_PRICES = "water_tier_prices"      # list[str], length 5
