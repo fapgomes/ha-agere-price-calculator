@@ -147,3 +147,33 @@ async def test_consumption_sensor_keeps_total_increasing(hass: HomeAssistant):
     attrs = hass.states.get("sensor.agere_cycle_consumption").attributes
     assert attrs["device_class"] == "water"
     assert attrs["state_class"] == "total_increasing"   # valid for water
+
+
+async def test_forecast_sensor_projects_the_period(hass: HomeAssistant):
+    await _setup(hass, "543", **{
+        CONF_READINGS: READINGS,
+        CONF_NEXT_READING_DATE: "2026-09-03",
+    })
+    state = hass.states.get("sensor.agere_forecast")
+    assert state is not None
+    a = state.attributes
+    assert a["metered_m3"] == 7.0
+    assert a["billing_days"] == 22
+    assert a["periods_in_history"] == 2
+    # the projection never falls below what the meter already shows
+    assert a["projected_m3"] >= a["metered_m3"]
+    # and the forecast total is at least the cost already accrued
+    accrued = Decimal(hass.states.get("sensor.agere_total_cost").state)
+    assert Decimal(state.state) >= accrued
+
+
+async def test_forecast_without_history_uses_the_current_rate(hass: HomeAssistant):
+    """A single reading means no closed period to learn from."""
+    await _setup(hass, "543", **{
+        CONF_READINGS: [READINGS[-1]],
+        CONF_NEXT_READING_DATE: "2026-09-03",
+    })
+    a = hass.states.get("sensor.agere_forecast").attributes
+    assert a["periods_in_history"] == 0
+    assert a["historical_daily_m3"] is None
+    assert a["projected_m3"] >= a["metered_m3"]

@@ -20,6 +20,7 @@ from .const import (
     CONF_VAT_RATE, CONF_WASTE, CONF_WATER, DEFAULT_VAT_RATE, DOMAIN,
     CalcConfig, Tariff,
 )
+from .forecast import project_consumption
 from .entry_options import (
     next_reading_date_from_options, readings_from_options, readings_to_options,
 )
@@ -74,6 +75,8 @@ class _AgereData:
         self.marginal = Decimal("0")
         self.days_elapsed = 0
         self.overdue = False
+        self.projected_m3 = Decimal("0")
+        self.forecast = None
         self._seeding = False
         self._listeners: list = []
 
@@ -102,10 +105,14 @@ class _AgereData:
         self.marginal = marginal_price(
             self.cycle.consumption, self.cycle.days, self.config
         )
+        closed_cycles = self.log.closed_cycles()
         self.closed = [
-            (c, calcular(c.consumption, c.days, self.config))
-            for c in self.log.closed_cycles()
+            (c, calcular(c.consumption, c.days, self.config)) for c in closed_cycles
         ]
+        self.projected_m3 = project_consumption(
+            self.cycle, self.days_elapsed, closed_cycles
+        )
+        self.forecast = calcular(self.projected_m3, self.cycle.days, self.config)
         for cb in self._listeners:
             cb()
 
@@ -135,6 +142,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         AgereMarginalPriceSensor(data),
         AgereCycleConsumptionSensor(data),
         AgereLastInvoiceSensor(data),
+        AgereForecastSensor(data),
     ]
     for key, attr, name in (
         (CONF_WATER, "water", "Water cost"),
@@ -336,4 +344,50 @@ class AgereLastInvoiceSensor(_AgereBase):
                 for cycle, bd in self._data.closed
             ],
             "readings": readings_to_options(self._data.log),
+        }
+
+
+class AgereForecastSensor(_AgereBase):
+    """Projected total for the period in progress, once it closes.
+
+    The projection blends the period's own rate with the historical average,
+    weighted by how far into the period we are: history at the start, the real
+    rate at the end. See forecast.py for why.
+    """
+
+    _attr_name = "AGERE forecast"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "EUR"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, data: _AgereData) -> None:
+        super().__init__(data)
+        self._attr_unique_id = f"{data.entry.entry_id}_forecast"
+        self.entity_id = "sensor.agere_forecast"
+
+    @property
+    def native_value(self):
+        return float(self._data.forecast.total) if self._data.forecast else None
+
+    @property
+    def extra_state_attributes(self):
+        cycle = self._data.cycle
+        if cycle is None or self._data.forecast is None:
+            return None
+        elapsed = self._data.days_elapsed
+        closed = [c for c, _ in self._data.closed]
+        hist_days = sum(c.days for c in closed)
+        return {
+            "projected_m3": float(self._data.projected_m3),
+            "metered_m3": float(cycle.consumption),
+            "days_elapsed": elapsed,
+            "days_remaining": max(0, cycle.days - elapsed),
+            "billing_days": cycle.days,
+            "current_daily_m3": float(cycle.consumption / elapsed) if elapsed else None,
+            "historical_daily_m3": (
+                float(sum((c.consumption for c in closed), Decimal(0)) / hist_days)
+                if hist_days else None
+            ),
+            "weight_on_current_rate": round(min(elapsed / cycle.days, 1.0), 3),
+            "periods_in_history": len(closed),
         }

@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `agere_water.set_next_reading_date` services, and a Readings section under the
   integration's Configure menu for editing past periods.
 - `sensor.agere_last_invoice`, exposing every reconstructed billing period.
+- `sensor.agere_forecast`, projecting the total for the period in progress. The
+  projection blends the period's own rate with the historical average, weighted
+  by how far into the period it is, so it is usable from day one instead of
+  swinging wildly.
 - Test suite now runs in CI on Python 3.13.
 
 ### Fixed

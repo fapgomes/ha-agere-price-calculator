@@ -329,10 +329,37 @@ Available via **Configure → Charges and VAT** on the integration entry:
 | `sensor.agere_sanitation_cost` | Sanitation sub-cost (drainage + availability), when sanitation is enabled. |
 | `sensor.agere_waste_cost` | Waste sub-cost (variable + fixed, never VAT), when waste is enabled. |
 | `sensor.agere_taxes_cost` | Government-taxes sub-cost, when taxes is enabled. |
+| `sensor.agere_forecast` | Projected total (EUR) for the period in progress, once it closes. Attributes: `projected_m3`, `metered_m3`, `days_elapsed`, `days_remaining`, `current_daily_m3`, `historical_daily_m3`, `weight_on_current_rate`, `periods_in_history`. Diagnostic entity. |
 | `sensor.agere_last_invoice` | Total (EUR) of the most recent **closed** billing period. Attributes list every derived period (start, end, days, m³, total) and the reading log itself. Diagnostic entity. |
 
 Per-component sensors are only created for components that are enabled in
 the options.
+
+### How the forecast is projected
+
+Extrapolating from the period's own rate is unusable in its first days — on day
+one a single heavy day dominates and the forecast is nonsense. Extrapolating from
+history alone ignores what is actually happening now. So the two are blended,
+weighted by how far into the period you are:
+
+```
+weight        = days_elapsed / billing_days
+daily rate    = weight × (metered / days_elapsed) + (1 − weight) × historical daily
+projected m³  = daily rate × billing_days
+```
+
+On day one the projection is essentially the historical average; on the last day
+it is exactly what the meter shows; in between it transitions smoothly, with no
+thresholds. The historical average is total m³ over total days across every
+closed period, so a long period weighs more than a short one. The projection is
+never allowed to fall below what the meter already shows.
+
+With no closed period to learn from, the projection falls back to the current
+rate alone, and `historical_daily_m3` reads `null`.
+
+The forecast is a projection of *consumption*; the cost is then computed by the
+same engine as any other period, so the tier proration and the fixed charges are
+handled identically.
 
 ## Energy dashboard
 
