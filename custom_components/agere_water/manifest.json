@@ -1,6 +1,9 @@
 {
   "domain": "agere_water",
   "name": "AGERE Water Price",
+  "after_dependencies": [
+    "recorder"
+  ],
   "codeowners": [
     "@fapgomes"
   ],
