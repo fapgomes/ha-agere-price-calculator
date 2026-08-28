@@ -59,6 +59,11 @@ annually, so treat these values as a snapshot for 2026, not a permanent
 guarantee. Per-tariff-value editing in the UI is not yet exposed (see
 Limitations below); a tariff update currently requires a code change.
 
+## Requirements
+
+- **Home Assistant 2024.3.0 or newer.**
+- A sensor reporting your water meter's **cumulative** consumption in m³.
+
 ## Installation / Deploy to Home Assistant
 
 The integration is a **custom component** — it lives in the

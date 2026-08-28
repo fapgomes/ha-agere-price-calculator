@@ -5,13 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-08-28
 
 ### Changed
 - **Breaking:** billing periods now come from meter readings instead of a fixed
   reset day, matching AGERE's own read-to-read periods. Existing entries migrate
   automatically: the previous cycle boundary and baseline are converted into an
   equivalent reading, so no consumption is lost.
+- **Breaking:** the minimum Home Assistant version is now 2024.3.0, up from
+  2024.1.0. Migrating a config entry uses the `version` parameter of
+  `async_update_entry`, which was introduced in 2024.3.0 — 2024.2.0 does not
+  accept it.
+- The integration's **Configure** dialog is now a menu — *Readings*, *Next
+  reading date* and *Charges and VAT* — instead of a single form. The initial
+  setup form only asks for the meter sensor.
 
 ### Added
 - Reading log with `agere_water.set_reading`, `agere_water.remove_reading` and
@@ -22,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   projection blends the period's own rate with the historical average, weighted
   by how far into the period it is, so it is usable from day one instead of
   swinging wildly.
+- `sensor.agere_total_cost` gained attributes describing the period it is
+  billing: `cycle_start`, `cycle_end`, `billing_days`,
+  `billing_days_estimated`, `cycle_overdue` and `next_reading_date`.
 - Test suite now runs in CI on Python 3.13.
 
 ### Fixed
@@ -30,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   five cost sensors logged a warning on every start and, more importantly, got
   no long-term statistics — the series the Energy dashboard reads. They now use
   `state_class: total` with `last_reset` set to the start of the billing period.
+- Rejecting a reading in the Configure dialog now says which two readings
+  conflict and with what values, instead of a generic "invalid" message. The
+  previous wording gave no hint when the invoice's `Consumo` had been entered
+  where its `Leitura` belongs.
 - Period length no longer assumes a calendar month. A period whose meter
   readings are 33 days apart was being computed as a 31-day calendar month,
   which prorates the consumption tiers wrongly and overstated the total by more
