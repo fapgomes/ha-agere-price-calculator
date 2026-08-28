@@ -34,10 +34,22 @@ def readings_from_options(options: Mapping[str, Any]) -> ReadingLog:
     return ReadingLog(readings)
 
 
+def _format_m3(value: Decimal) -> str:
+    """Shortest exact decimal form, without float noise or exponents.
+
+    `m3` reaches us as a float from the service schema and the number selector,
+    so 543 arrives as Decimal("543.0") and would be stored — and shown — as
+    "543.0". `normalize()` alone is not enough: it renders 500.0 as "5E+2".
+    """
+    if value == value.to_integral_value():
+        return str(value.quantize(Decimal(1)))
+    return str(value.normalize())
+
+
 def readings_to_options(log: ReadingLog) -> list[dict[str, str]]:
     """Serialise a ReadingLog for storage in options."""
     return [
-        {"date": r.date.isoformat(), "m3": str(r.m3), "source": r.source}
+        {"date": r.date.isoformat(), "m3": _format_m3(r.m3), "source": r.source}
         for r in log.readings
     ]
 

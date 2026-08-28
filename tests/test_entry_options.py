@@ -57,10 +57,14 @@ def test_readings_from_options_propagates_log_validation():
 
 
 def test_readings_to_options_stores_m3_as_string():
+    """String, not float: options are JSON, and a float would lose precision on
+    the way back to Decimal. Trailing zeros are trimmed, so 536.500 stores as
+    "536.5" and round-trips to the same value."""
     log = ReadingLog([Reading(date(2026, 8, 12), Decimal("536.500"))])
-    assert readings_to_options(log) == [
-        {"date": "2026-08-12", "m3": "536.500", "source": "manual"}
-    ]
+    stored = readings_to_options(log)
+    assert stored == [{"date": "2026-08-12", "m3": "536.5", "source": "manual"}]
+    assert isinstance(stored[0]["m3"], str)
+    assert readings_from_options({CONF_READINGS: stored}).last.m3 == Decimal("536.5")
 
 
 def test_next_reading_date_from_options():
@@ -70,3 +74,27 @@ def test_next_reading_date_from_options():
     assert next_reading_date_from_options({}) is None
     assert next_reading_date_from_options({CONF_NEXT_READING_DATE: None}) is None
     assert next_reading_date_from_options({CONF_NEXT_READING_DATE: ""}) is None
+
+
+def test_readings_to_options_drops_float_formatting():
+    """m3 arrives as a float from the service schema and the number selector, so
+    543 becomes Decimal("543.0"). Storing that would show "543.0 m³" in the UI."""
+    log = ReadingLog([Reading(date(2026, 8, 12), Decimal("543.0"))])
+    assert readings_to_options(log)[0]["m3"] == "543"
+
+
+def test_readings_to_options_never_uses_exponent_notation():
+    """Decimal.normalize() turns 500.0 into 5E+2, which would be stored and shown
+    verbatim."""
+    log = ReadingLog([Reading(date(2026, 8, 12), Decimal("500.0"))])
+    assert readings_to_options(log)[0]["m3"] == "500"
+
+
+def test_readings_to_options_trims_only_trailing_zeros():
+    log = ReadingLog([Reading(date(2026, 8, 12), Decimal("543.60"))])
+    assert readings_to_options(log)[0]["m3"] == "543.6"
+
+
+def test_readings_to_options_keeps_full_precision():
+    log = ReadingLog([Reading(date(2026, 8, 12), Decimal("536.61791992188"))])
+    assert readings_to_options(log)[0]["m3"] == "536.61791992188"
