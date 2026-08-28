@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test suite now runs in CI on Python 3.13.
 
 ### Fixed
+- Monetary sensors declared `state_class: total_increasing`, which Home
+  Assistant rejects for `device_class: monetary` (only `total` is allowed). The
+  five cost sensors logged a warning on every start and, more importantly, got
+  no long-term statistics — the series the Energy dashboard reads. They now use
+  `state_class: total` with `last_reset` set to the start of the billing period.
 - Period length no longer assumes a calendar month. On invoice
   042.DP.26080422002962699 (20 m³ over 33 days) the computed total was 46.99 €
   against 45.53 € billed; it is now exact.

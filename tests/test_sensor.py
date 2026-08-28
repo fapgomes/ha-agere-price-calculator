@@ -121,3 +121,29 @@ async def test_malformed_readings_do_not_break_setup(hass: HomeAssistant):
         CONF_READINGS: [{"date": "not-a-date", "m3": "2631"}],
     })
     assert hass.states.get("sensor.agere_total_cost") is not None
+
+
+async def test_monetary_sensors_use_total_with_last_reset(hass: HomeAssistant):
+    """device_class monetary forbids total_increasing; the per-period reset is
+    carried by last_reset instead. An invalid pair leaves the sensor without
+    long-term statistics, which is what the Energy dashboard reads."""
+    await _setup(hass, "2638", **{
+        CONF_READINGS: INVOICE_READINGS,
+        CONF_NEXT_READING_DATE: "2026-09-03",
+    })
+    for entity_id in (
+        "sensor.agere_total_cost", "sensor.agere_water_cost",
+        "sensor.agere_sanitation_cost", "sensor.agere_waste_cost",
+        "sensor.agere_taxes_cost",
+    ):
+        attrs = hass.states.get(entity_id).attributes
+        assert attrs["device_class"] == "monetary", entity_id
+        assert attrs["state_class"] == "total", entity_id
+        assert attrs["last_reset"].startswith("2026-08-13"), entity_id
+
+
+async def test_consumption_sensor_keeps_total_increasing(hass: HomeAssistant):
+    await _setup(hass, "2638", **{CONF_READINGS: INVOICE_READINGS})
+    attrs = hass.states.get("sensor.agere_cycle_consumption").attributes
+    assert attrs["device_class"] == "water"
+    assert attrs["state_class"] == "total_increasing"   # valid for water

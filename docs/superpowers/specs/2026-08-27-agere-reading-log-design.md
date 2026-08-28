@@ -139,9 +139,8 @@ Verificação contra as faturas: `07-10 → 08-12` dá 33 dias e 20 m³;
 **Ciclo em atraso.** Se `hoje > end` e ainda não chegou leitura nova, os `days`
 do ciclo **congelam** no valor já determinado — não se estende o `end` até hoje.
 Estender aumentaria os limites de escalão a meio do ciclo e faria o custo
-acumulado *descer*, o que quebra a monotonia exigida por
-`SensorStateClass.TOTAL_INCREASING` (o HA interpretaria a descida como
-substituição de contador). O consumo continua a subir normalmente. A situação
+acumulado *descer*, o que quebra a monotonia exigida pelas
+estatísticas do HA (um delta negativo entre pontos). O consumo continua a subir normalmente. A situação
 fica visível no atributo `cycle_overdue: true`.
 
 **Estado inicial sem leituras:** no primeiro `recompute()` com valor de contador

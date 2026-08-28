@@ -182,11 +182,26 @@ class _AgereBase(SensorEntity):
         self.async_write_ha_state()
 
 
-class AgereTotalCostSensor(_AgereBase):
-    _attr_name = "AGERE total cost"
+class _AgereCycleMonetary(_AgereBase):
+    """A cost that accumulates within one billing period, then starts over.
+
+    `device_class: monetary` only accepts `state_class: total` — never
+    `total_increasing` — so the per-period reset is expressed through
+    `last_reset` instead of relying on the value dropping.
+    """
+
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "EUR"
+
+    @property
+    def last_reset(self):
+        cycle = self._data.cycle
+        return dt_util.start_of_local_day(cycle.start) if cycle else None
+
+
+class AgereTotalCostSensor(_AgereCycleMonetary):
+    _attr_name = "AGERE total cost"
 
     def __init__(self, data: _AgereData) -> None:
         super().__init__(data)
@@ -274,11 +289,7 @@ class AgereCycleConsumptionSensor(_AgereBase):
         return float(self._data.cycle.consumption)
 
 
-class AgereComponentCostSensor(_AgereBase):
-    _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = "EUR"
-
+class AgereComponentCostSensor(_AgereCycleMonetary):
     def __init__(self, data: _AgereData, attr: str, name: str) -> None:
         super().__init__(data)
         self._attr = attr
