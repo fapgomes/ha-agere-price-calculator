@@ -26,9 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   five cost sensors logged a warning on every start and, more importantly, got
   no long-term statistics — the series the Energy dashboard reads. They now use
   `state_class: total` with `last_reset` set to the start of the billing period.
-- Period length no longer assumes a calendar month. On invoice
-  042.DP.26080422002962699 (20 m³ over 33 days) the computed total was 46.99 €
-  against 45.53 € billed; it is now exact.
+- Period length no longer assumes a calendar month. A period whose meter
+  readings are 33 days apart was being computed as a 31-day calendar month,
+  which prorates the consumption tiers wrongly and overstated the total by more
+  than a euro.
 
 ## [0.1.2] - 2026-07-27
 

@@ -139,22 +139,23 @@ def test_tier_limits_33_days_prorated():
     assert tier_limits(33, (5, 10, 15, 25)) == [6, 11, 17, 28]
 
 
-def test_water_lines_20m3_33days():
-    lines = water_lines(Decimal("20"), 33, DEFAULT_TARIFF)
-    assert [l.qty for l in lines] == [Decimal(x) for x in (6, 5, 6, 3, 0)]
+def test_water_lines_24m3_33days():
+    lines = water_lines(Decimal("24"), 33, DEFAULT_TARIFF)
+    assert [l.qty for l in lines] == [Decimal(x) for x in (6, 5, 6, 7, 0)]
     assert [l.value for l in lines] == [
         Decimal("3.05"), Decimal("3.32"), Decimal("5.16"),
-        Decimal("5.63"), Decimal("0.00"),
+        Decimal("13.14"), Decimal("0.00"),
     ]
 
 
-def test_full_bill_20m3_33days():
-    """Invoice 042.DP.26080422002962699, period 2026-07-11 ~ 2026-08-12."""
-    bd = calcular(Decimal("20"), 33, CalcConfig())
-    assert bd.water == Decimal("22.02")
-    assert bd.sanitation == Decimal("14.50")
-    assert bd.waste == Decimal("2.82")
-    assert bd.taxes == Decimal("3.94")
-    assert bd.base_without_vat == Decimal("43.28")
-    assert bd.vat == Decimal("2.25")
-    assert bd.total == Decimal("45.53")
+def test_full_bill_24m3_33days():
+    """A 33-day period: tier limits prorate to 6/11/17/28 m³ (15 * 33/30 = 16.5
+    rounds half up to 17), and every component is exercised."""
+    bd = calcular(Decimal("24"), 33, CalcConfig())
+    assert bd.water == Decimal("29.53")
+    assert bd.sanitation == Decimal("16.42")
+    assert bd.waste == Decimal("2.88")
+    assert bd.taxes == Decimal("4.16")
+    assert bd.base_without_vat == Decimal("52.99")
+    assert bd.vat == Decimal("2.83")
+    assert bd.total == Decimal("55.82")

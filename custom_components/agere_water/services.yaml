@@ -7,7 +7,7 @@ set_reading:
         date:
     m3:
       required: false
-      example: 2631
+      example: 536
       selector:
         number:
           min: 0

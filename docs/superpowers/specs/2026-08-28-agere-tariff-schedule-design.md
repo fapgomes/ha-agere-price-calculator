@@ -20,19 +20,24 @@ a integração teria aplicado a tarifa nova ao período todo e errado a fatura.
 
 ## Evidência
 
-Vinte faturas reais (`042.DP.*`, 2025-01 a 2026-08), dezenove do contador
-`C10EB030162` e uma de outro local de consumo. Toda a regra abaixo foi
-reconstruída delas e verificada num protótipo descartável: **18 das 19 batem ao
-cêntimo**.
+Vinte faturas reais da tarifa Doméstico (2025-01 a 2026-08), dezenove do mesmo
+contador e uma de outro local de consumo. Toda a regra abaixo foi reconstruída
+delas e verificada num protótipo descartável: **18 das 19 batem ao cêntimo**.
+
+As faturas contêm dados pessoais (leituras, consumos e totais) e **não entram no
+repositório**. Ficam num ficheiro local ignorado pelo git,
+`docs/agere-invoices.local.md`, para a validação poder ser repetida durante a
+implementação. O que se publica são os **valores tarifários**, que são preços
+públicos da AGERE.
 
 ### O calendário reconstruído
 
-| `effective_from` | Fatura de origem | Componentes que mudam |
-|---|---|---|
-| `2024-12-12` | 25010422002430799 | base completa (data mais antiga com prova) |
-| `2025-01-01` | 25010422002430799 (linhas divididas) | `tax_water 0,0382`, `tax_sanitation 0,0150` |
-| `2026-01-01` | 26010422002886099 | `tax_waste_mgmt 2,8821` |
-| `2026-02-01` | 26020422002775399 (linhas divididas) | escalões de água, `water_availability`, `sanitation_drainage`, `sanitation_availability`, `waste_variable`, `waste_fixed` |
+| `effective_from` | Componentes que mudam |
+|---|---|
+| `2024-12-12` | base completa (data mais antiga com prova) |
+| `2025-01-01` | `tax_water 0,0382`, `tax_sanitation 0,0150` |
+| `2026-01-01` | `tax_waste_mgmt 2,8821` |
+| `2026-02-01` | escalões de água, `water_availability`, `sanitation_drainage`, `sanitation_availability`, `waste_variable`, `waste_fixed` |
 
 Valores da base (`2024-12-12`): escalões `0,4751 / 0,6206 / 0,8048 / 1,7550 /
 (desconhecido)`; `water_availability 4,5476`; `sanitation_drainage 0,4402`;
@@ -53,54 +58,58 @@ componentes**. Uma tabela indexada por ano estaria errada de origem.
 
 ### A divisão é por componente, não por período
 
-A fatura de janeiro de 2025 (período `2024-12-12 ~ 2025-01-13`, 33 dias, 12 m³)
-divide **apenas as linhas de taxas**:
+Numa fatura cujo período atravessa 2025-01-01, a AGERE divide **apenas as linhas
+de taxas** — porque só as taxas de recursos hídricos mudaram nessa data:
 
 ```
-Tx de Rec. Hídricos Água   12/12-31/12   7 m3           0,037900   0,27
-Tx de Rec. Hídricos Água   01/01-13/01   5 m3           0,038200   0,19
-Consumo Água [0 - 5]       6 m3 em 33 dias               0,475100   2,85
+Tx de Rec. Hídricos Água   <dias em dezembro>   0,037900
+Tx de Rec. Hídricos Água   <dias em janeiro>    0,038200
+Consumo Água [0 - 5]       <período completo>   0,475100
 ```
 
-A água mantém-se numa linha única de 12 m³ em 33 dias, porque o seu preço não
+A água mantém-se numa linha única sobre o período inteiro, porque o seu preço não
 mudou a 2025-01-01. Isto exclui a abordagem óbvia de partir o período e chamar o
 motor atual por cada sub-período: partir a água a 01/01 reprorrateava os limites
 dos escalões e reiniciava-os, produzindo um total diferente do faturado.
 
 ### As três regras de divisão
 
-Da fatura de fevereiro de 2026 (`2026-01-14 ~ 2026-02-11`, 29 dias, 11 m³,
-28,65 €), que atravessa a mudança de 2026-02-01:
+Reconstruídas de duas faturas cujos períodos atravessam mudanças de tarifa, e
+ilustradas aqui com um período sintético `2026-01-20 ~ 2026-02-15` (27 dias,
+15 m³) que atravessa 2026-02-01:
 
-1. **Repartição do consumo, proporcional aos dias.** `11 × 18/29 = 6,83 → 7` e
-   `11 × 11/29 = 4,17 → 4`. Confirmado nas linhas de drenagem (7 + 4) e de
-   resíduos variáveis (7 + 4), e na fatura de janeiro de 2025 (`12 × 20/33 → 7`
-   e `12 × 13/33 → 5`).
+1. **Repartição do consumo, proporcional aos dias.** Sub-período A = 12 dias
+   (20/01–31/01), B = 15 dias (01/02–15/02). `15 × 12/27 = 6,67 → 7`, e o resto
+   (8) vai para o último. Confirmado nas faturas reais pelas linhas de drenagem e
+   de resíduos variáveis, cuja repartição coincide com a das linhas de água.
 2. **Escalões reiniciam do zero em cada sub-período**, com limites prorrateados
-   pelos dias **desse** sub-período. A: 7 m³ em 18 dias, limites 3/6/9, linhas
-   `3+3+1`. B: 4 m³ em 11 dias, limites 2/4, linhas `2+2` — de volta ao primeiro
-   escalão.
+   pelos dias **desse** sub-período. A: 7 m³ em 12 dias, limites 2/4/6/10, linhas
+   `2+2+2+1`. B: 8 m³ em 15 dias, limites 3/5/8/13, linhas `3+2+3` — de volta ao
+   primeiro escalão.
 3. **Encargos fixos cobrados uma só vez, à tarifa em vigor no fim do período.**
-   `Trf Disponib. Água 4,8623` (tarifa nova) e `Trf Dispon. Águ. Resid` rotulada
-   `fevereiro/26`. Confirmado independentemente pela fatura de janeiro de 2026,
-   que atravessa a mudança de `tax_waste_mgmt` a 2026-01-01 e mostra uma linha
-   única já a `2,8821`.
+   Nas faturas reais, a disponibilidade de água e a de águas residuais aparecem
+   numa linha única já à tarifa nova, e a segunda vem rotulada com o mês final.
+   Confirmado independentemente por uma fatura que atravessa a mudança de
+   `tax_waste_mgmt` a 2026-01-01 e mostra uma linha única já a `2,8821`.
 
 O arredondamento é **linha a linha ao cêntimo**, e os subtotais somam cêntimos já
-arredondados: em janeiro de 2025, `7 × 0,0379 = 0,2653 → 0,27` e
-`5 × 0,0382 = 0,191 → 0,19`.
+arredondados: `7 × 0,0379 = 0,2653 → 0,27` e `5 × 0,0382 = 0,191 → 0,19` aparecem
+como duas linhas de 0,27 e 0,19, não como uma de 0,46.
 
 ### Duas anomalias registadas, nenhuma modelada
 
-- **Fatura de fevereiro de 2026:** a linha `Tarifa Fixa Resíduos` não é impressa,
-  e o `Total sem IVA` impresso (24,81 €) é inferior em 2,53 € ao que o `TOTAL`
-  implica. O encargo **é** cobrado — `27,34 + 1,31 = 28,65`, igual ao `FAC` e ao
-  `Saldo Atual`. É um defeito de impressão da AGERE nos períodos divididos. O
-  modelo natural reproduz o total; não há exceção a modelar.
-- **Fatura do outro contador (`C13FA785368`, 25110422000417999):** tem linhas de
-  `Acerto Períodos Anteriores` de −3 m³ em cada componente, que explicam
-  exatamente os 3,13 € de diferença. Um acerto retroativo é imprevisível a partir
-  do log de leituras. Excluída dos testes, com o motivo registado.
+- **Numa das faturas com período dividido**, a linha `Tarifa Fixa Resíduos` não é
+  impressa e o `Total sem IVA` impresso é inferior ao que o `TOTAL` implica,
+  exatamente pelo valor dessa tarifa fixa. O encargo **é** cobrado: reconstruindo
+  as parcelas com ele incluído, chega-se ao `TOTAL` impresso, ao `FAC` e ao
+  `Saldo Atual`. É um defeito de impressão da AGERE nos períodos divididos, não
+  uma regra de negócio. O modelo natural reproduz o total; não há exceção a
+  modelar.
+- **A fatura do outro local de consumo** tem linhas de `Acerto Períodos
+  Anteriores` com quantidades negativas em cada componente, que explicam
+  exatamente a diferença face ao nosso cálculo. Um acerto retroativo é
+  imprevisível a partir do log de leituras. Excluída dos testes, com o motivo
+  registado.
 
 ### A proração dos limites de escalão fica sem resolução
 
@@ -325,40 +334,27 @@ A resposta de `agere_water.set_reading` mantém a forma e ganha `tariff_split`.
 
 ## Testes
 
-As 19 faturas do contador entram como tabela em `tests/fixtures_invoices.py`,
-transcritas à mão — não parseadas dos PDFs, para a suite não depender de ficheiros
-pessoais:
+As faturas reais **não entram no repositório** — contêm leituras, consumos e
+totais, que são dados pessoais. Ficam em `docs/agere-invoices.local.md`, ignorado
+pelo git, e a validação contra as 19 faturas é feita localmente durante a
+implementação, com o resultado reportado (não commitado).
 
-| Período | Dias | m³ | Total |
-|---|---|---|---|
-| 2024-12-12 ~ 2025-01-13 | 33 | 12 | 27,90 |
-| 2025-01-14 ~ 2025-02-12 | 30 | 11 | 26,87 |
-| 2025-02-13 ~ 2025-03-13 | 29 | 9 | 24,29 |
-| 2025-03-14 ~ 2025-04-10 | 28 | 10 | 25,68 |
-| 2025-04-11 ~ 2025-05-13 | 33 | 11 | 26,52 |
-| 2025-05-14 ~ 2025-06-12 | 30 | 17 | 37,22 |
-| 2025-06-13 ~ 2025-07-10 | 28 | 18 | 40,82 |
-| 2025-07-11 ~ 2025-08-12 | 33 | 16 | 33,46 |
-| 2025-08-13 ~ 2025-09-10 | 29 | 18 | 39,62 |
-| 2025-10-11 ~ 2025-11-12 | 33 | 15 | 32,07 |
-| 2025-11-13 ~ 2025-12-12 | 30 | 10 | 25,49 |
-| 2025-12-13 ~ 2026-01-13 | 32 | 13 | 29,76 (desvio conhecido) |
-| 2026-01-14 ~ 2026-02-11 | 29 | 11 | 28,65 (dividida) |
-| 2026-02-12 ~ 2026-03-11 | 28 | 10 | 27,96 |
-| 2026-03-12 ~ 2026-04-13 | 33 | 18 | 40,41 |
-| 2026-04-14 ~ 2026-05-13 | 30 | 14 | 33,72 |
-| 2026-05-14 ~ 2026-06-12 | 30 | 28 | 71,21 |
-| 2026-06-13 ~ 2026-07-10 | 28 | 18 | 44,21 |
-| 2026-07-11 ~ 2026-08-12 | 33 | 20 | 45,53 |
+O que a suite leva:
 
-Um teste parametrizado sobre a tabela sobe a cobertura de faturas reais de 3 para
-19, cobrindo 28/29/30/32/33 dias, tarifas de ambos os lados da mudança e consumos
-de 9 a 28 m³.
+- **Fixtures sintéticas** construídas para exercitar cada regra: períodos de 28,
+  29, 30, 32 e 33 dias, períodos que atravessam cada uma das três datas de vigor,
+  e consumos que alcançam cada escalão. Os totais esperados são calculados com o
+  motor e fixados nos testes.
+- **As duas faturas reais já publicadas** antes deste trabalho (28 m³/30 dias e
+  18 m³/28 dias), que continuam a ser as âncoras contra faturação real.
+- **O desvio de 32 dias** como teste documentado, com o valor do desvio mas sem o
+  período nem o consumo que lhe deram origem.
 
 **Os dois casos divididos ganham testes linha a linha**, não só de total — são os
 únicos que exercitam a divisão, e um total pode acertar por compensação de erros.
-Janeiro de 2025 prova o filtro por componente (água numa linha, taxas em duas);
-fevereiro de 2026 prova o reinício dos escalões e os fixos à tarifa do fim.
+Um caso que atravessa 2025-01-01 prova o filtro por componente (água numa linha,
+taxas em duas); um que atravessa 2026-02-01 prova o reinício dos escalões e os
+fixos à tarifa do fim.
 
 **Testes unitários** das peças novas, todos puros: `_sub_periods`, `_allocate`
 (incluindo 7 m³ em 15+15 dias), `TariffSchedule.at` (incluindo o erro antes de

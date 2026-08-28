@@ -13,7 +13,7 @@ from custom_components.agere_water.const import (
 
 
 async def _entry(hass: HomeAssistant, readings=None) -> MockConfigEntry:
-    hass.states.async_set("sensor.water_meter_total", "2631",
+    hass.states.async_set("sensor.water_meter_total", "536",
                           {"unit_of_measurement": "m³"})
     entry = MockConfigEntry(
         domain=DOMAIN, version=2,
@@ -32,44 +32,44 @@ async def _entry(hass: HomeAssistant, readings=None) -> MockConfigEntry:
 
 async def test_set_reading_inserts_and_returns_the_cycle(hass: HomeAssistant):
     entry = await _entry(hass, [
-        {"date": "2026-07-10", "m3": "2611", "source": "manual"},
+        {"date": "2026-07-10", "m3": "512", "source": "manual"},
     ])
     response = await hass.services.async_call(
         DOMAIN, "set_reading",
-        {"date": "2026-08-12", "m3": 2631},
+        {"date": "2026-08-12", "m3": 536},
         blocking=True, return_response=True,
     )
     await hass.async_block_till_done()
     assert response["cycle"] == {
         "start": "2026-07-11", "end": "2026-08-12", "days": 33,
-        "consumption_m3": 20.0, "total": 45.53, "water": 22.02,
-        "sanitation": 14.5, "waste": 2.82, "taxes": 3.94, "vat": 2.25,
+        "consumption_m3": 24.0, "total": 55.82, "water": 29.53,
+        "sanitation": 16.42, "waste": 2.88, "taxes": 4.16, "vat": 2.83,
     }
-    assert entry.options[CONF_READINGS][-1]["m3"] == "2631"
+    assert entry.options[CONF_READINGS][-1]["m3"] == "536"
 
 
 async def test_set_reading_upserts_same_date(hass: HomeAssistant):
     entry = await _entry(hass, [
-        {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+        {"date": "2026-08-12", "m3": "536", "source": "manual"},
     ])
     await hass.services.async_call(
-        DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 2632}, blocking=True
+        DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 537}, blocking=True
     )
     await hass.async_block_till_done()
     assert len(entry.options[CONF_READINGS]) == 1
-    assert entry.options[CONF_READINGS][0]["m3"] == "2632"
+    assert entry.options[CONF_READINGS][0]["m3"] == "537"
 
 
 async def test_set_reading_rejects_decreasing_value(hass: HomeAssistant):
-    await _entry(hass, [{"date": "2026-07-10", "m3": "2611", "source": "manual"}])
+    await _entry(hass, [{"date": "2026-07-10", "m3": "512", "source": "manual"}])
     with pytest.raises(ServiceValidationError, match="lower than"):
         await hass.services.async_call(
-            DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 2600}, blocking=True
+            DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 480}, blocking=True
         )
 
 
 async def test_set_reading_without_m3_and_without_recorder_data(hass: HomeAssistant):
-    await _entry(hass, [{"date": "2026-07-10", "m3": "2611", "source": "manual"}])
+    await _entry(hass, [{"date": "2026-07-10", "m3": "512", "source": "manual"}])
     with pytest.raises(ServiceValidationError, match="no meter value"):
         await hass.services.async_call(
             DOMAIN, "set_reading", {"date": "2026-08-12"}, blocking=True
@@ -78,8 +78,8 @@ async def test_set_reading_without_m3_and_without_recorder_data(hass: HomeAssist
 
 async def test_remove_reading(hass: HomeAssistant):
     entry = await _entry(hass, [
-        {"date": "2026-07-10", "m3": "2611", "source": "manual"},
-        {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+        {"date": "2026-07-10", "m3": "512", "source": "manual"},
+        {"date": "2026-08-12", "m3": "536", "source": "manual"},
     ])
     await hass.services.async_call(
         DOMAIN, "remove_reading", {"date": "2026-07-10"}, blocking=True
@@ -89,7 +89,7 @@ async def test_remove_reading(hass: HomeAssistant):
 
 
 async def test_remove_missing_reading_raises(hass: HomeAssistant):
-    await _entry(hass, [{"date": "2026-08-12", "m3": "2631", "source": "manual"}])
+    await _entry(hass, [{"date": "2026-08-12", "m3": "536", "source": "manual"}])
     with pytest.raises(ServiceValidationError, match="no reading"):
         await hass.services.async_call(
             DOMAIN, "remove_reading", {"date": "2026-01-01"}, blocking=True
@@ -98,7 +98,7 @@ async def test_remove_missing_reading_raises(hass: HomeAssistant):
 
 async def test_set_next_reading_date_and_clear(hass: HomeAssistant):
     entry = await _entry(hass, [
-        {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+        {"date": "2026-08-12", "m3": "536", "source": "manual"},
     ])
     await hass.services.async_call(
         DOMAIN, "set_next_reading_date", {"date": "2026-09-03"}, blocking=True
@@ -112,7 +112,7 @@ async def test_set_next_reading_date_and_clear(hass: HomeAssistant):
 
 
 async def test_set_next_reading_date_before_last_reading_rejected(hass: HomeAssistant):
-    await _entry(hass, [{"date": "2026-08-12", "m3": "2631", "source": "manual"}])
+    await _entry(hass, [{"date": "2026-08-12", "m3": "536", "source": "manual"}])
     with pytest.raises(ServiceValidationError, match="must be after"):
         await hass.services.async_call(
             DOMAIN, "set_next_reading_date", {"date": "2026-08-01"}, blocking=True
@@ -131,5 +131,5 @@ async def test_service_requires_config_entry_when_ambiguous(hass: HomeAssistant)
     await hass.async_block_till_done()
     with pytest.raises(ServiceValidationError, match="config_entry"):
         await hass.services.async_call(
-            DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 2631}, blocking=True
+            DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 536}, blocking=True
         )

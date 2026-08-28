@@ -11,9 +11,9 @@ from custom_components.agere_water.const import (
     CONF_SOURCE, CONF_TAXES, CONF_VAT_RATE, CONF_WASTE, CONF_WATER, DOMAIN,
 )
 
-INVOICE_READINGS = [
-    {"date": "2026-07-10", "m3": "2611", "source": "manual"},
-    {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+READINGS = [
+    {"date": "2026-07-10", "m3": "512", "source": "manual"},
+    {"date": "2026-08-12", "m3": "536", "source": "manual"},
 ]
 
 
@@ -33,7 +33,7 @@ async def test_user_flow_creates_entry(hass: HomeAssistant):
 
 
 async def _entry(hass: HomeAssistant, **options) -> MockConfigEntry:
-    hass.states.async_set("sensor.water_meter_total", "2638",
+    hass.states.async_set("sensor.water_meter_total", "543",
                           {"unit_of_measurement": "m³"})
     entry = MockConfigEntry(
         domain=DOMAIN, version=2,
@@ -41,7 +41,7 @@ async def _entry(hass: HomeAssistant, **options) -> MockConfigEntry:
         options={
             CONF_WATER: True, CONF_SANITATION: True, CONF_WASTE: True,
             CONF_TAXES: True, CONF_INCLUDE_VAT: True, CONF_VAT_RATE: "0.06",
-            CONF_READINGS: INVOICE_READINGS, **options,
+            CONF_READINGS: READINGS, **options,
         },
     )
     entry.add_to_hass(hass)
@@ -73,7 +73,7 @@ async def test_components_step_keeps_the_readings(hass: HomeAssistant):
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert entry.options[CONF_SANITATION] is False
-    assert entry.options[CONF_READINGS] == INVOICE_READINGS   # untouched
+    assert entry.options[CONF_READINGS] == READINGS   # untouched
 
 
 async def _open_reading(hass: HomeAssistant, entry: MockConfigEntry, value: str):
@@ -90,12 +90,12 @@ async def test_add_a_new_reading(hass: HomeAssistant):
     entry = await _entry(hass)
     result = await _open_reading(hass, entry, "new")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"date": "2026-09-03", "m3": 2638, "delete": False}
+        result["flow_id"], {"date": "2026-09-03", "m3": 543, "delete": False}
     )
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert entry.options[CONF_READINGS][-1] == {
-        "date": "2026-09-03", "m3": "2638", "source": "manual"
+        "date": "2026-09-03", "m3": "543", "source": "manual"
     }
 
 
@@ -103,7 +103,7 @@ async def test_edit_a_past_reading_date(hass: HomeAssistant):
     entry = await _entry(hass)
     result = await _open_reading(hass, entry, "2026-07-10")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"date": "2026-07-12", "m3": 2611, "delete": False}
+        result["flow_id"], {"date": "2026-07-12", "m3": 512, "delete": False}
     )
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
@@ -116,7 +116,7 @@ async def test_delete_a_reading(hass: HomeAssistant):
     entry = await _entry(hass)
     result = await _open_reading(hass, entry, "2026-07-10")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"date": "2026-07-10", "m3": 2611, "delete": True}
+        result["flow_id"], {"date": "2026-07-10", "m3": 512, "delete": True}
     )
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
@@ -127,11 +127,11 @@ async def test_invalid_edit_shows_the_error_in_the_form(hass: HomeAssistant):
     entry = await _entry(hass)
     result = await _open_reading(hass, entry, "2026-08-12")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"date": "2026-08-12", "m3": 2000, "delete": False}
+        result["flow_id"], {"date": "2026-08-12", "m3": 300, "delete": False}
     )
     assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["errors"]["base"] == "invalid_reading"
-    assert entry.options[CONF_READINGS] == INVOICE_READINGS   # nothing written
+    assert entry.options[CONF_READINGS] == READINGS   # nothing written
 
 
 async def test_set_and_clear_next_reading_date(hass: HomeAssistant):
@@ -163,11 +163,11 @@ async def test_invalid_edit_surfaces_the_concrete_reason(hass: HomeAssistant):
     entry = await _entry(hass)
     result = await _open_reading(hass, entry, "2026-08-12")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"date": "2026-08-12", "m3": 2000, "delete": False}
+        result["flow_id"], {"date": "2026-08-12", "m3": 300, "delete": False}
     )
     assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["errors"]["base"] == "invalid_reading"
     reason = result["description_placeholders"]["error"]
     assert "2026-08-12" in reason
     assert "2026-07-10" in reason
-    assert "2611" in reason
+    assert "512" in reason

@@ -149,9 +149,9 @@ periods of 28, 33 and ~22 days. So each period is derived from the readings
 you enter, one per invoice:
 
 ```
-reading n-1            reading n
-2026-07-10 (2611 m³)   2026-08-12 (2631 m³)
-     └──── period: 2026-07-11 → 2026-08-12 = 33 days, 20 m³ ────┘
+reading n-1           reading n
+2026-07-10 (512 m³)   2026-08-12 (536 m³)
+     └──── period: 2026-07-11 → 2026-08-12 = 33 days, 24 m³ ────┘
 ```
 
 The tier limits are prorated by that length, which is what makes the total
@@ -163,10 +163,10 @@ Only two numbers per invoice, plus one optional date. On page 2 of the AGERE
 `Documento de Pagamento`:
 
 ```
-Fatura FAC 0210422026/0049297324
+Fatura FAC 02104220xx/00xxxxxxxx
 Data de Fatura         2026-08-13      ← NOT this one
 Período                2026-07-11 ~ 2026-08-12
-Contador C10EB030162   2026-08-12      Leitura 2631      Consumo 20,00 m3
+Contador Cxxxxxxxxxx   2026-08-12      Leitura 536       Consumo 24,00 m3
                            ▲                    ▲
                           date                 m3
 
@@ -179,13 +179,13 @@ Período de Comunicação 2026-09-02 ~ 2026-09-04
 | What you enter | Where it comes from | Example |
 |---|---|---|
 | `date` | The **`Leitura` date** = end of `Período`. **Not** `Data de Fatura`, which is usually a day later. | `2026-08-12` |
-| `m3` | The `Leitura` value — the meter total, not the period's consumption. | `2631` |
+| `m3` | The `Leitura` value — the meter total, not the period's consumption. | `536` |
 | next reading date | `Período de Comunicação`. Optional; pick a day inside the window. | `2026-09-03` |
 
 Two traps, both easy to fall into:
 
 - **`Leitura` vs `Consumo`.** The invoice prints them side by side. `m3` wants
-  the cumulative meter total (`2631`), never the period's usage (`20`). Enter
+  the cumulative meter total (`536`), never the period's usage (`24`). Enter
   consumption values and the readings stop increasing, which the integration
   rejects — or, worse, silently accepts if that month's usage happens to be
   higher than the previous month's.
@@ -205,21 +205,21 @@ reading*, and switch to YAML mode. Then, oldest invoice first:
 action: agere_water.set_reading
 data:
   date: "2026-06-12"
-  m3: 2593
+  m3: 488
 ```
 
 ```yaml
 action: agere_water.set_reading
 data:
   date: "2026-07-10"
-  m3: 2611
+  m3: 500
 ```
 
 ```yaml
 action: agere_water.set_reading
 data:
   date: "2026-08-12"
-  m3: 2631
+  m3: 524
 ```
 
 Every call answers with the **most recent complete period** — the one ending
@@ -231,13 +231,13 @@ cycle:
   start: "2026-07-11"
   end: "2026-08-12"
   days: 33
-  consumption_m3: 20
-  total: 45.53
-  water: 22.02
-  sanitation: 14.5
-  waste: 2.82
-  taxes: 3.94
-  vat: 2.25
+  consumption_m3: 24
+  total: 55.82
+  water: 29.53
+  sanitation: 16.42
+  waste: 2.88
+  taxes: 4.16
+  vat: 2.83
 ```
 
 Finally, tell it when the current period closes, so its length is exact
@@ -258,7 +258,7 @@ which lists every period.
 
 If you are upgrading from a version that used a reset day, the migration
 leaves one reading marked `auto`, carrying the meter's own value at the old
-cycle boundary (e.g. `2631.61791992188`). Entering the invoice reading for
+cycle boundary (e.g. `536.61791992188`). Entering the invoice reading for
 that same date replaces it and aligns the period with AGERE exactly.
 
 #### Every month, when a new invoice arrives
@@ -267,7 +267,7 @@ Two calls, or the same thing through the UI:
 
 ```yaml
 action: agere_water.set_reading
-data: {date: "2026-09-03", m3: 2643}     # closes the period
+data: {date: "2026-09-03", m3: 540}      # closes the period
 ```
 ```yaml
 action: agere_water.set_next_reading_date
@@ -284,9 +284,9 @@ Readings.** The dropdown lists what is stored, each row annotated with the
 period it produces:
 
 ```
-2026-08-12 · 2631 m³ · 33 d · 20 m³
-2026-07-10 · 2611 m³ · 28 d · 18 m³
-2026-06-12 · 2593 m³
+2026-08-12 · 524 m³ · 33 d · 24 m³
+2026-07-10 · 500 m³ · 28 d · 12 m³
+2026-06-12 · 488 m³
 ➕ New reading
 ```
 
@@ -371,8 +371,6 @@ invoices:
 - 28 m³ over 30 days → 71.21 € total.
 - 18 m³ over 28 days → 44.21 € total (tier limits prorated to 5/9/14/23 m³
   for the 28-day period).
-- 20 m³ over 33 days → 45.53 € total (tier limits prorated to 6/11/17/28 m³
-  for the 33-day period).
 
 ## License
 

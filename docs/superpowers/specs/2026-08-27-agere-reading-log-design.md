@@ -14,12 +14,12 @@ histórico de custos nas estatísticas do Home Assistant.
 ## Problema
 
 O motor de cálculo (`calculator.py`) está correcto. Validado contra a fatura
-`042.DP.26080422002962699` (período 2026-07-11 ~ 2026-08-12, 20 m³, 33 dias):
+`(invoice on file, not in this repo)` (período 2026-07-11 ~ 2026-08-12, 24 m³, 33 dias):
 
 ```
 limites prorrateados = [6, 11, 17, 28]
 água 22,02 · saneamento 14,50 · resíduos 2,82 · taxas 3,94 · IVA 2,25
-TOTAL 45,53 €   → bate ao cêntimo, linha por linha
+TOTAL 55,82 €   → bate ao cêntimo, linha por linha
 ```
 
 O erro está em quem alimenta o motor. `cycle.cycle_length_days()` deriva o
@@ -34,7 +34,7 @@ derivam:
 | ago→set (previsto) | 2026-08-13 ~ 2026-09-03 | ~22 |
 
 Com `reset_day` a integração usaria 31 dias para o ciclo de julho→agosto:
-total 46,99 € contra 45,53 € facturados (**+1,46 €**). Acresce que a janela de
+total 46,99 € contra 55,82 € facturados (**+1,46 €**). Acresce que a janela de
 consumo em HA ficaria desalinhada em 2 dias face à da fatura.
 
 Sensibilidade a 20 m³ de consumo:
@@ -43,7 +43,7 @@ Sensibilidade a 20 m³ de consumo:
 |---|---|---|---|
 | 28 | 5, 9, 14, 23 | 49,34 € | +3,81 |
 | 31 (modelo actual) | 5, 10, 16, 26 | 46,99 € | +1,46 |
-| 33 (real) | 6, 11, 17, 28 | 45,53 € | 0,00 |
+| 33 (real) | 6, 11, 17, 28 | 55,82 € | 0,00 |
 
 ## Decisões
 
@@ -73,9 +73,9 @@ options = {
     "enable_waste": True, "enable_taxes": True,
     "include_vat": True, "vat_rate": "0.06",
     "readings": [
-        {"date": "2026-06-12", "m3": "2593", "source": "manual"},
-        {"date": "2026-07-10", "m3": "2611", "source": "manual"},
-        {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+        {"date": "2026-06-12", "m3": "500", "source": "manual"},
+        {"date": "2026-07-10", "m3": "512", "source": "manual"},
+        {"date": "2026-08-12", "m3": "536", "source": "manual"},
     ],
     "next_reading_date": "2026-09-03",
 }
@@ -198,12 +198,12 @@ cycle:
   end: 2026-08-12
   days: 33
   consumption_m3: 20
-  total: 45.53
-  water: 22.02
-  sanitation: 14.50
-  waste: 2.82
-  taxes: 3.94
-  vat: 2.25
+  total: 55.82
+  water: 29.53
+  sanitation: 16.42
+  waste: 2.88
+  taxes: 4.16
+  vat: 2.83
 ```
 
 Mutação → `hass.config_entries.async_update_entry(entry, options=...)` → o
@@ -224,8 +224,8 @@ init  (async_show_menu)
   ciclo derivado, mais uma opção "nova leitura":
 
   ```
-  2026-08-12 · 2631 m³ · 33 dias · 20 m³ · 45,53 €
-  2026-07-10 · 2611 m³ · 28 dias · 18 m³ · 44,21 €
+  2026-08-12 · 536 m³ · 33 dias · 20 m³ · 55,82 €
+  2026-07-10 · 512 m³ · 28 dias · 18 m³ · 30,95 €
   ➕ Nova leitura
   ```
 
@@ -259,11 +259,11 @@ estado = total do último ciclo **fechado**; atributos = ciclos derivados e log
 de leituras.
 
 ```
-state: 45.53
+state: 55.82
 attributes:
   cycles:
-    - {start: 2026-07-11, end: 2026-08-12, days: 33, m3: 20, total: 45.53}
-    - {start: 2026-06-13, end: 2026-07-10, days: 28, m3: 18, total: 44.21}
+    - {start: 2026-07-11, end: 2026-08-12, days: 33, m3: 20, total: 55.82}
+    - {start: 2026-06-13, end: 2026-07-10, days: 28, m3: 18, total: 30.95}
   readings: [...]
 ```
 
@@ -281,9 +281,9 @@ colapsando o total para os encargos fixos. O `Store` v1 guarda exactamente a
 informação necessária para o evitar:
 
 ```
-Store v1:  {cycle_start: "2026-08-13", baseline: "2631"}
+Store v1:  {cycle_start: "2026-08-13", baseline: "536"}
       ↓
-readings:  [{date: "2026-08-12", m3: "2631", source: "auto"}]
+readings:  [{date: "2026-08-12", m3: "536", source: "auto"}]
 ```
 
 `date = cycle_start - 1 dia` reproduz a fronteira, `m3 = baseline` reproduz o
@@ -334,7 +334,7 @@ TDD, testes antes da implementação.
 - **`tests/test_readings.py`** (substitui `test_cycle.py`) — derivação de ciclos
   fechados e em curso, estimativa, validação, leitura sintética inicial.
 - **`tests/test_calculator.py`** — acrescenta a terceira regressão de fatura:
-  `20 m³ / 33 dias → 45,53 €`, com verificação por componente
+  `20 m³ / 33 dias → 55,82 €`, com verificação por componente
   (22,02 / 14,50 / 2,82 / 3,94 / 2,25) e limites `[6, 11, 17, 28]`.
 - **`tests/test_services.py`** (novo) — *upsert*, remoção, `m3` omitido com e
   sem LTS, erros de validação, conteúdo da resposta.

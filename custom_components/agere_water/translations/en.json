@@ -29,7 +29,7 @@
       },
       "reading_edit": {
         "title": "Reading",
-        "description": "Date of the meter reading (end of the billing period) and the meter total in m³, both as printed on the AGERE invoice. Use the invoice's 'Leitura' value — the cumulative meter total, e.g. 2631 — and NOT the 'Consumo' value, which is only that period's usage.",
+        "description": "Date of the meter reading (end of the billing period) and the meter total in m³, both as printed on the AGERE invoice. Use the invoice's 'Leitura' value — the cumulative meter total — and NOT the 'Consumo' value, which is only that period's usage.",
         "data": {
           "date": "Reading date (end of billing period)",
           "m3": "Meter total in m³ ('Leitura', not 'Consumo')",

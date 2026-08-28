@@ -25,11 +25,11 @@ def _v1_entry(hass: HomeAssistant) -> MockConfigEntry:
 
 
 async def test_migration_converts_store_state_to_a_reading(hass: HomeAssistant):
-    hass.states.async_set("sensor.water_meter_total", "2640",
+    hass.states.async_set("sensor.water_meter_total", "545",
                           {"unit_of_measurement": "m³"})
     entry = _v1_entry(hass)
     store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}")
-    await store.async_save({"cycle_start": "2026-08-13", "baseline": "2631"})
+    await store.async_save({"cycle_start": "2026-08-13", "baseline": "536"})
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -38,13 +38,13 @@ async def test_migration_converts_store_state_to_a_reading(hass: HomeAssistant):
     assert LEGACY_RESET_DAY not in entry.options
     # cycle_start - 1 day, so the derived cycle still starts on 2026-08-13
     assert entry.options[CONF_READINGS] == [
-        {"date": "2026-08-12", "m3": "2631", "source": "auto"}
+        {"date": "2026-08-12", "m3": "536", "source": "auto"}
     ]
     assert await store.async_load() is None
 
 
 async def test_migration_without_store_starts_empty(hass: HomeAssistant):
-    hass.states.async_set("sensor.water_meter_total", "2640",
+    hass.states.async_set("sensor.water_meter_total", "545",
                           {"unit_of_measurement": "m³"})
     entry = _v1_entry(hass)
 
@@ -55,19 +55,19 @@ async def test_migration_without_store_starts_empty(hass: HomeAssistant):
     assert LEGACY_RESET_DAY not in entry.options
     # no prior state to preserve -> the sensor platform seeds a reading itself
     assert len(entry.options[CONF_READINGS]) == 1
-    assert entry.options[CONF_READINGS][0]["m3"] == "2640"
+    assert entry.options[CONF_READINGS][0]["m3"] == "545"
 
 
 async def test_migration_preserves_the_cycle_boundary(hass: HomeAssistant):
-    hass.states.async_set("sensor.water_meter_total", "2651",
+    hass.states.async_set("sensor.water_meter_total", "556",
                           {"unit_of_measurement": "m³"})
     entry = _v1_entry(hass)
     store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}")
-    await store.async_save({"cycle_start": "2026-08-13", "baseline": "2631"})
+    await store.async_save({"cycle_start": "2026-08-13", "baseline": "536"})
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
     attrs = hass.states.get("sensor.agere_total_cost").attributes
     assert attrs["cycle_start"] == "2026-08-13"
-    assert attrs["cycle_consumption_m3"] == 20.0   # 2651 - 2631, baseline kept
+    assert attrs["cycle_consumption_m3"] == 20.0   # 556 - 536, baseline kept

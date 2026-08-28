@@ -15,7 +15,7 @@
 - **Phase 1 only.** Historical external statistics (`agere_water:total_cost`, `async_add_external_statistics`) are explicitly out of scope for this plan and get their own plan later.
 - **`calculator.py` must not change.** It is validated against three invoices; the whole point of this work is fixing its inputs.
 - **`readings.py` must not import `homeassistant`.** Same rule already followed by `calculator.py` and the old `cycle.py`, so its tests run without the HA harness.
-- **Money and volume are `Decimal` end to end.** Stored in options as strings (`"2631"`), the convention already used by `vat_rate`.
+- **Money and volume are `Decimal` end to end.** Stored in options as strings (`"536"`), the convention already used by `vat_rate`.
 - **Reading date semantics:** the date of a reading is the **end of the billing period** (the `Período Faturação` end / `Leitura` date on the invoice), never the invoice issue date. Every user-facing string must say so.
 - **Monotonicity:** `sensor.agere_total_cost` is `TOTAL_INCREASING`. Within a cycle, `days` must stay constant so the accumulated total never decreases. This is why an overdue cycle freezes its `days` instead of extending `end`.
 - **`strings.json` and `translations/en.json` are byte-identical.** Every string change must be applied to both.
@@ -45,7 +45,7 @@ def test_tier_limits_33_days_prorated():
 
 
 def test_water_lines_20m3_33days():
-    lines = water_lines(Decimal("20"), 33, DEFAULT_TARIFF)
+    lines = water_lines(Decimal("24"), 33, DEFAULT_TARIFF)
     assert [l.qty for l in lines] == [Decimal(x) for x in (6, 5, 6, 3, 0)]
     assert [l.value for l in lines] == [
         Decimal("3.05"), Decimal("3.32"), Decimal("5.16"),
@@ -54,15 +54,15 @@ def test_water_lines_20m3_33days():
 
 
 def test_full_bill_20m3_33days():
-    """Invoice 042.DP.26080422002962699, period 2026-07-11 ~ 2026-08-12."""
-    bd = calcular(Decimal("20"), 33, CalcConfig())
-    assert bd.water == Decimal("22.02")
-    assert bd.sanitation == Decimal("14.50")
-    assert bd.waste == Decimal("2.82")
-    assert bd.taxes == Decimal("3.94")
-    assert bd.base_without_vat == Decimal("43.28")
-    assert bd.vat == Decimal("2.25")
-    assert bd.total == Decimal("45.53")
+    """Invoice (invoice on file, not in this repo), period 2026-07-11 ~ 2026-08-12."""
+    bd = calcular(Decimal("24"), 33, CalcConfig())
+    assert bd.water == Decimal("29.53")
+    assert bd.sanitation == Decimal("16.42")
+    assert bd.waste == Decimal("2.88")
+    assert bd.taxes == Decimal("4.16")
+    assert bd.base_without_vat == Decimal("52.99")
+    assert bd.vat == Decimal("2.83")
+    assert bd.total == Decimal("55.82")
 ```
 
 - [ ] **Step 2: Run the tests**
@@ -119,9 +119,9 @@ from custom_components.agere_water.readings import (
 
 # The three readings printed on the 2026-08-13 invoice.
 INVOICE_READINGS = [
-    Reading(date(2026, 6, 12), Decimal("2593")),
-    Reading(date(2026, 7, 10), Decimal("2611")),
-    Reading(date(2026, 8, 12), Decimal("2631")),
+    Reading(date(2026, 6, 12), Decimal("500")),
+    Reading(date(2026, 7, 10), Decimal("512")),
+    Reading(date(2026, 8, 12), Decimal("536")),
 ]
 
 
@@ -130,7 +130,7 @@ def test_empty_log():
     assert len(log) == 0
     assert log.last is None
     assert log.closed_cycles() == []
-    assert log.current_cycle(Decimal("2631")) is None
+    assert log.current_cycle(Decimal("536")) is None
 
 
 def test_readings_sorted_ascending():
@@ -138,20 +138,20 @@ def test_readings_sorted_ascending():
     assert [r.date for r in log.readings] == [
         date(2026, 6, 12), date(2026, 7, 10), date(2026, 8, 12),
     ]
-    assert log.last.m3 == Decimal("2631")
+    assert log.last.m3 == Decimal("536")
 
 
 def test_closed_cycles_match_invoices():
     cycles = ReadingLog(INVOICE_READINGS).closed_cycles()
     assert cycles == [
-        Cycle(date(2026, 6, 13), date(2026, 7, 10), 28, Decimal("18"), False),
-        Cycle(date(2026, 7, 11), date(2026, 8, 12), 33, Decimal("20"), False),
+        Cycle(date(2026, 6, 13), date(2026, 7, 10), 28, Decimal("12"), False),
+        Cycle(date(2026, 7, 11), date(2026, 8, 12), 33, Decimal("24"), False),
     ]
 
 
 def test_current_cycle_with_next_reading_date():
     log = ReadingLog(INVOICE_READINGS)
-    cycle = log.current_cycle(Decimal("2638"), date(2026, 9, 3))
+    cycle = log.current_cycle(Decimal("543"), date(2026, 9, 3))
     assert cycle == Cycle(
         date(2026, 8, 13), date(2026, 9, 3), 22, Decimal("7"), False
     )
@@ -159,7 +159,7 @@ def test_current_cycle_with_next_reading_date():
 
 def test_current_cycle_estimates_from_previous_cycle():
     log = ReadingLog(INVOICE_READINGS)
-    cycle = log.current_cycle(Decimal("2638"))
+    cycle = log.current_cycle(Decimal("543"))
     # previous closed cycle was 33 days -> 08-13 .. 09-14
     assert cycle.start == date(2026, 8, 13)
     assert cycle.end == date(2026, 9, 14)
@@ -168,8 +168,8 @@ def test_current_cycle_estimates_from_previous_cycle():
 
 
 def test_current_cycle_single_reading_defaults_to_30_days():
-    log = ReadingLog([Reading(date(2026, 8, 12), Decimal("2631"), SOURCE_AUTO)])
-    cycle = log.current_cycle(Decimal("2633"))
+    log = ReadingLog([Reading(date(2026, 8, 12), Decimal("536"), SOURCE_AUTO)])
+    cycle = log.current_cycle(Decimal("538"))
     assert cycle.days == 30
     assert cycle.end == date(2026, 9, 11)
     assert cycle.consumption == Decimal("2")
@@ -178,14 +178,14 @@ def test_current_cycle_single_reading_defaults_to_30_days():
 
 def test_current_cycle_floors_consumption_when_meter_decreases():
     log = ReadingLog(INVOICE_READINGS)
-    cycle = log.current_cycle(Decimal("2600"))  # meter replaced / reset
+    cycle = log.current_cycle(Decimal("480"))  # meter replaced / reset
     assert cycle.consumption == Decimal("0")
 
 
 def test_next_reading_date_before_cycle_start_rejected():
     log = ReadingLog(INVOICE_READINGS)
     with pytest.raises(ValueError, match="after"):
-        log.current_cycle(Decimal("2638"), date(2026, 8, 12))
+        log.current_cycle(Decimal("543"), date(2026, 8, 12))
 
 
 def test_set_inserts_in_order():
@@ -198,15 +198,15 @@ def test_set_inserts_in_order():
 
 def test_set_replaces_same_date():
     log = ReadingLog(INVOICE_READINGS).set(
-        Reading(date(2026, 8, 12), Decimal("2632"))
+        Reading(date(2026, 8, 12), Decimal("537"))
     )
     assert len(log) == 3
-    assert log.last.m3 == Decimal("2632")
+    assert log.last.m3 == Decimal("537")
 
 
 def test_set_is_immutable():
     original = ReadingLog(INVOICE_READINGS)
-    original.set(Reading(date(2026, 9, 3), Decimal("2640")))
+    original.set(Reading(date(2026, 9, 3), Decimal("545")))
     assert len(original) == 3
 
 
@@ -222,23 +222,23 @@ def test_remove_missing_raises():
 
 
 def test_remove_last_reading_empties_log():
-    log = ReadingLog([Reading(date(2026, 8, 12), Decimal("2631"))])
+    log = ReadingLog([Reading(date(2026, 8, 12), Decimal("536"))])
     assert len(log.remove(date(2026, 8, 12))) == 0
 
 
 def test_duplicate_dates_rejected():
     with pytest.raises(ValueError, match="duplicate"):
         ReadingLog([
-            Reading(date(2026, 8, 12), Decimal("2631")),
-            Reading(date(2026, 8, 12), Decimal("2632")),
+            Reading(date(2026, 8, 12), Decimal("536")),
+            Reading(date(2026, 8, 12), Decimal("537")),
         ])
 
 
 def test_decreasing_m3_rejected():
     with pytest.raises(ValueError, match="lower than"):
         ReadingLog([
-            Reading(date(2026, 7, 10), Decimal("2611")),
-            Reading(date(2026, 8, 12), Decimal("2600")),
+            Reading(date(2026, 7, 10), Decimal("512")),
+            Reading(date(2026, 8, 12), Decimal("480")),
         ])
 
 
@@ -250,11 +250,11 @@ def test_negative_m3_rejected():
 def test_set_that_breaks_ordering_rejected():
     log = ReadingLog(INVOICE_READINGS)
     with pytest.raises(ValueError, match="lower than"):
-        log.set(Reading(date(2026, 7, 10), Decimal("2700")))
+        log.set(Reading(date(2026, 7, 10), Decimal("700")))
 
 
 def test_days_elapsed_inclusive_and_clamped():
-    cycle = Cycle(date(2026, 7, 11), date(2026, 8, 12), 33, Decimal("20"), False)
+    cycle = Cycle(date(2026, 7, 11), date(2026, 8, 12), 33, Decimal("24"), False)
     assert days_elapsed(cycle, date(2026, 7, 11)) == 1
     assert days_elapsed(cycle, date(2026, 8, 12)) == 33
     assert days_elapsed(cycle, date(2026, 8, 20)) == 33   # clamped, cycle frozen
@@ -262,13 +262,13 @@ def test_days_elapsed_inclusive_and_clamped():
 
 
 def test_is_overdue():
-    cycle = Cycle(date(2026, 7, 11), date(2026, 8, 12), 33, Decimal("20"), False)
+    cycle = Cycle(date(2026, 7, 11), date(2026, 8, 12), 33, Decimal("24"), False)
     assert is_overdue(cycle, date(2026, 8, 12)) is False
     assert is_overdue(cycle, date(2026, 8, 13)) is True
 
 
 def test_default_source_is_manual():
-    assert Reading(date(2026, 8, 12), Decimal("2631")).source == SOURCE_MANUAL
+    assert Reading(date(2026, 8, 12), Decimal("536")).source == SOURCE_MANUAL
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -494,15 +494,15 @@ from custom_components.agere_water.readings import (
 )
 
 STORED = [
-    {"date": "2026-07-10", "m3": "2611", "source": "manual"},
-    {"date": "2026-08-12", "m3": "2631", "source": "auto"},
+    {"date": "2026-07-10", "m3": "512", "source": "manual"},
+    {"date": "2026-08-12", "m3": "536", "source": "auto"},
 ]
 
 
 def test_readings_from_options_roundtrip():
     log = readings_from_options({CONF_READINGS: STORED})
     assert [r.date for r in log.readings] == [date(2026, 7, 10), date(2026, 8, 12)]
-    assert log.last.m3 == Decimal("2631")
+    assert log.last.m3 == Decimal("536")
     assert log.last.source == SOURCE_AUTO
     assert readings_to_options(log) == STORED
 
@@ -513,33 +513,33 @@ def test_readings_from_options_missing_key():
 
 
 def test_readings_from_options_defaults_source_to_manual():
-    log = readings_from_options({CONF_READINGS: [{"date": "2026-08-12", "m3": "2631"}]})
+    log = readings_from_options({CONF_READINGS: [{"date": "2026-08-12", "m3": "536"}]})
     assert log.last.source == SOURCE_MANUAL
 
 
 def test_readings_from_options_accepts_numeric_m3():
     """Values written by a service call arrive as float/int, not str."""
-    log = readings_from_options({CONF_READINGS: [{"date": "2026-08-12", "m3": 2631}]})
-    assert log.last.m3 == Decimal("2631")
+    log = readings_from_options({CONF_READINGS: [{"date": "2026-08-12", "m3": 536}]})
+    assert log.last.m3 == Decimal("536")
 
 
 def test_readings_from_options_rejects_malformed_date():
     with pytest.raises(ValueError):
-        readings_from_options({CONF_READINGS: [{"date": "12-08-2026", "m3": "2631"}]})
+        readings_from_options({CONF_READINGS: [{"date": "12-08-2026", "m3": "536"}]})
 
 
 def test_readings_from_options_propagates_log_validation():
     with pytest.raises(ValueError, match="lower than"):
         readings_from_options({CONF_READINGS: [
-            {"date": "2026-07-10", "m3": "2611"},
-            {"date": "2026-08-12", "m3": "2600"},
+            {"date": "2026-07-10", "m3": "512"},
+            {"date": "2026-08-12", "m3": "480"},
         ]})
 
 
 def test_readings_to_options_stores_m3_as_string():
-    log = ReadingLog([Reading(date(2026, 8, 12), Decimal("2631.500"))])
+    log = ReadingLog([Reading(date(2026, 8, 12), Decimal("536.500"))])
     assert readings_to_options(log) == [
-        {"date": "2026-08-12", "m3": "2631.500", "source": "manual"}
+        {"date": "2026-08-12", "m3": "536.500", "source": "manual"}
     ]
 
 
@@ -664,9 +664,9 @@ from custom_components.agere_water.const import (
 )
 
 INVOICE_READINGS = [
-    {"date": "2026-06-12", "m3": "2593", "source": "manual"},
-    {"date": "2026-07-10", "m3": "2611", "source": "manual"},
-    {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+    {"date": "2026-06-12", "m3": "500", "source": "manual"},
+    {"date": "2026-07-10", "m3": "512", "source": "manual"},
+    {"date": "2026-08-12", "m3": "536", "source": "manual"},
 ]
 
 
@@ -690,7 +690,7 @@ async def _setup(hass: HomeAssistant, meter_state: str, **extra_options):
 
 
 async def test_sensors_created(hass: HomeAssistant):
-    await _setup(hass, "2631", **{CONF_READINGS: INVOICE_READINGS})
+    await _setup(hass, "536", **{CONF_READINGS: INVOICE_READINGS})
     for entity_id in (
         "sensor.agere_total_cost", "sensor.agere_marginal_price",
         "sensor.agere_cycle_consumption", "sensor.agere_water_cost",
@@ -700,22 +700,22 @@ async def test_sensors_created(hass: HomeAssistant):
 
 
 async def test_last_invoice_reproduces_both_closed_cycles(hass: HomeAssistant):
-    await _setup(hass, "2631", **{CONF_READINGS: INVOICE_READINGS})
+    await _setup(hass, "536", **{CONF_READINGS: INVOICE_READINGS})
     state = hass.states.get("sensor.agere_last_invoice")
-    assert Decimal(state.state) == Decimal("45.53")
+    assert Decimal(state.state) == Decimal("55.82")
     cycles = state.attributes["cycles"]
     assert cycles[0] == {
         "start": "2026-06-13", "end": "2026-07-10",
-        "days": 28, "m3": 18.0, "total": 44.21,
+        "days": 28, "m3": 18.0, "total": 30.95,
     }
     assert cycles[1] == {
         "start": "2026-07-11", "end": "2026-08-12",
-        "days": 33, "m3": 20.0, "total": 45.53,
+        "days": 33, "m3": 20.0, "total": 55.82,
     }
 
 
 async def test_current_cycle_uses_next_reading_date(hass: HomeAssistant):
-    await _setup(hass, "2638", **{
+    await _setup(hass, "543", **{
         CONF_READINGS: INVOICE_READINGS,
         CONF_NEXT_READING_DATE: "2026-09-03",
     })
@@ -729,7 +729,7 @@ async def test_current_cycle_uses_next_reading_date(hass: HomeAssistant):
 
 
 async def test_current_cycle_estimated_without_next_reading_date(hass: HomeAssistant):
-    await _setup(hass, "2638", **{CONF_READINGS: INVOICE_READINGS})
+    await _setup(hass, "543", **{CONF_READINGS: INVOICE_READINGS})
     attrs = hass.states.get("sensor.agere_total_cost").attributes
     assert attrs["billing_days"] == 33          # learned from the previous cycle
     assert attrs["billing_days_estimated"] is True
@@ -737,12 +737,12 @@ async def test_current_cycle_estimated_without_next_reading_date(hass: HomeAssis
 
 
 async def test_total_cost_recomputes_on_source_change(hass: HomeAssistant):
-    await _setup(hass, "2631", **{
+    await _setup(hass, "536", **{
         CONF_READINGS: INVOICE_READINGS,
         CONF_NEXT_READING_DATE: "2026-09-03",
     })
     before = Decimal(hass.states.get("sensor.agere_total_cost").state)
-    hass.states.async_set("sensor.water_meter_total", "2636",
+    hass.states.async_set("sensor.water_meter_total", "541",
                           {"unit_of_measurement": "m³"})
     await hass.async_block_till_done()
     assert hass.states.get("sensor.agere_cycle_consumption").state == "5.0"
@@ -750,26 +750,26 @@ async def test_total_cost_recomputes_on_source_change(hass: HomeAssistant):
 
 
 async def test_empty_log_seeds_an_auto_reading(hass: HomeAssistant):
-    entry = await _setup(hass, "2631")
+    entry = await _setup(hass, "536")
     await hass.async_block_till_done()
     stored = entry.options[CONF_READINGS]
     assert len(stored) == 1
-    assert stored[0]["m3"] == "2631"
+    assert stored[0]["m3"] == "536"
     assert stored[0]["source"] == "auto"
 
 
 async def test_seeding_does_not_repeat(hass: HomeAssistant):
-    entry = await _setup(hass, "2631")
+    entry = await _setup(hass, "536")
     await hass.async_block_till_done()
-    hass.states.async_set("sensor.water_meter_total", "2635",
+    hass.states.async_set("sensor.water_meter_total", "540",
                           {"unit_of_measurement": "m³"})
     await hass.async_block_till_done()
     assert len(entry.options[CONF_READINGS]) == 1
 
 
 async def test_malformed_readings_do_not_break_setup(hass: HomeAssistant):
-    await _setup(hass, "2631", **{
-        CONF_READINGS: [{"date": "not-a-date", "m3": "2631"}],
+    await _setup(hass, "536", **{
+        CONF_READINGS: [{"date": "not-a-date", "m3": "536"}],
     })
     assert hass.states.get("sensor.agere_total_cost") is not None
 ```
@@ -1002,11 +1002,11 @@ def _v1_entry(hass: HomeAssistant) -> MockConfigEntry:
 
 
 async def test_migration_converts_store_state_to_a_reading(hass: HomeAssistant):
-    hass.states.async_set("sensor.water_meter_total", "2640",
+    hass.states.async_set("sensor.water_meter_total", "545",
                           {"unit_of_measurement": "m³"})
     entry = _v1_entry(hass)
     store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}")
-    await store.async_save({"cycle_start": "2026-08-13", "baseline": "2631"})
+    await store.async_save({"cycle_start": "2026-08-13", "baseline": "536"})
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -1015,13 +1015,13 @@ async def test_migration_converts_store_state_to_a_reading(hass: HomeAssistant):
     assert LEGACY_RESET_DAY not in entry.options
     # cycle_start - 1 day, so the derived cycle still starts on 2026-08-13
     assert entry.options[CONF_READINGS] == [
-        {"date": "2026-08-12", "m3": "2631", "source": "auto"}
+        {"date": "2026-08-12", "m3": "536", "source": "auto"}
     ]
     assert await store.async_load() is None
 
 
 async def test_migration_without_store_starts_empty(hass: HomeAssistant):
-    hass.states.async_set("sensor.water_meter_total", "2640",
+    hass.states.async_set("sensor.water_meter_total", "545",
                           {"unit_of_measurement": "m³"})
     entry = _v1_entry(hass)
 
@@ -1032,22 +1032,22 @@ async def test_migration_without_store_starts_empty(hass: HomeAssistant):
     assert LEGACY_RESET_DAY not in entry.options
     # no prior state to preserve -> the sensor platform seeds a reading itself
     assert len(entry.options[CONF_READINGS]) == 1
-    assert entry.options[CONF_READINGS][0]["m3"] == "2640"
+    assert entry.options[CONF_READINGS][0]["m3"] == "545"
 
 
 async def test_migration_preserves_the_cycle_boundary(hass: HomeAssistant):
-    hass.states.async_set("sensor.water_meter_total", "2651",
+    hass.states.async_set("sensor.water_meter_total", "556",
                           {"unit_of_measurement": "m³"})
     entry = _v1_entry(hass)
     store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}")
-    await store.async_save({"cycle_start": "2026-08-13", "baseline": "2631"})
+    await store.async_save({"cycle_start": "2026-08-13", "baseline": "536"})
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
     attrs = hass.states.get("sensor.agere_total_cost").attributes
     assert attrs["cycle_start"] == "2026-08-13"
-    assert attrs["cycle_consumption_m3"] == 20.0   # 2651 - 2631, baseline kept
+    assert attrs["cycle_consumption_m3"] == 20.0   # 556 - 536, baseline kept
 ```
 
 - [ ] **Step 2: Run the tests and record that they cannot be verified locally**
@@ -1181,8 +1181,8 @@ from custom_components.agere_water.const import (
 )
 
 INVOICE_READINGS = [
-    {"date": "2026-07-10", "m3": "2611", "source": "manual"},
-    {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+    {"date": "2026-07-10", "m3": "512", "source": "manual"},
+    {"date": "2026-08-12", "m3": "536", "source": "manual"},
 ]
 
 
@@ -1202,7 +1202,7 @@ async def test_user_flow_creates_entry(hass: HomeAssistant):
 
 
 async def _entry(hass: HomeAssistant, **options) -> MockConfigEntry:
-    hass.states.async_set("sensor.water_meter_total", "2638",
+    hass.states.async_set("sensor.water_meter_total", "543",
                           {"unit_of_measurement": "m³"})
     entry = MockConfigEntry(
         domain=DOMAIN, version=2,
@@ -1259,12 +1259,12 @@ async def test_add_a_new_reading(hass: HomeAssistant):
     entry = await _entry(hass)
     result = await _open_reading(hass, entry, "new")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"date": "2026-09-03", "m3": 2638, "delete": False}
+        result["flow_id"], {"date": "2026-09-03", "m3": 543, "delete": False}
     )
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert entry.options[CONF_READINGS][-1] == {
-        "date": "2026-09-03", "m3": "2638", "source": "manual"
+        "date": "2026-09-03", "m3": "543", "source": "manual"
     }
 
 
@@ -1272,7 +1272,7 @@ async def test_edit_a_past_reading_date(hass: HomeAssistant):
     entry = await _entry(hass)
     result = await _open_reading(hass, entry, "2026-07-10")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"date": "2026-07-12", "m3": 2611, "delete": False}
+        result["flow_id"], {"date": "2026-07-12", "m3": 512, "delete": False}
     )
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
@@ -1285,7 +1285,7 @@ async def test_delete_a_reading(hass: HomeAssistant):
     entry = await _entry(hass)
     result = await _open_reading(hass, entry, "2026-07-10")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"date": "2026-07-10", "m3": 2611, "delete": True}
+        result["flow_id"], {"date": "2026-07-10", "m3": 512, "delete": True}
     )
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
@@ -1646,7 +1646,7 @@ from custom_components.agere_water.const import (
 
 
 async def _entry(hass: HomeAssistant, readings=None) -> MockConfigEntry:
-    hass.states.async_set("sensor.water_meter_total", "2631",
+    hass.states.async_set("sensor.water_meter_total", "536",
                           {"unit_of_measurement": "m³"})
     entry = MockConfigEntry(
         domain=DOMAIN, version=2,
@@ -1665,44 +1665,44 @@ async def _entry(hass: HomeAssistant, readings=None) -> MockConfigEntry:
 
 async def test_set_reading_inserts_and_returns_the_cycle(hass: HomeAssistant):
     entry = await _entry(hass, [
-        {"date": "2026-07-10", "m3": "2611", "source": "manual"},
+        {"date": "2026-07-10", "m3": "512", "source": "manual"},
     ])
     response = await hass.services.async_call(
         DOMAIN, "set_reading",
-        {"date": "2026-08-12", "m3": 2631},
+        {"date": "2026-08-12", "m3": 536},
         blocking=True, return_response=True,
     )
     await hass.async_block_till_done()
     assert response["cycle"] == {
         "start": "2026-07-11", "end": "2026-08-12", "days": 33,
-        "consumption_m3": 20.0, "total": 45.53, "water": 22.02,
-        "sanitation": 14.5, "waste": 2.82, "taxes": 3.94, "vat": 2.25,
+        "consumption_m3": 20.0, "total": 55.82, "water": 29.53,
+        "sanitation": 16.42, "waste": 2.88, "taxes": 4.16, "vat": 2.83,
     }
-    assert entry.options[CONF_READINGS][-1]["m3"] == "2631"
+    assert entry.options[CONF_READINGS][-1]["m3"] == "536"
 
 
 async def test_set_reading_upserts_same_date(hass: HomeAssistant):
     entry = await _entry(hass, [
-        {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+        {"date": "2026-08-12", "m3": "536", "source": "manual"},
     ])
     await hass.services.async_call(
-        DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 2632}, blocking=True
+        DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 537}, blocking=True
     )
     await hass.async_block_till_done()
     assert len(entry.options[CONF_READINGS]) == 1
-    assert entry.options[CONF_READINGS][0]["m3"] == "2632"
+    assert entry.options[CONF_READINGS][0]["m3"] == "537"
 
 
 async def test_set_reading_rejects_decreasing_value(hass: HomeAssistant):
-    await _entry(hass, [{"date": "2026-07-10", "m3": "2611", "source": "manual"}])
+    await _entry(hass, [{"date": "2026-07-10", "m3": "512", "source": "manual"}])
     with pytest.raises(ServiceValidationError, match="lower than"):
         await hass.services.async_call(
-            DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 2600}, blocking=True
+            DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 480}, blocking=True
         )
 
 
 async def test_set_reading_without_m3_and_without_recorder_data(hass: HomeAssistant):
-    await _entry(hass, [{"date": "2026-07-10", "m3": "2611", "source": "manual"}])
+    await _entry(hass, [{"date": "2026-07-10", "m3": "512", "source": "manual"}])
     with pytest.raises(ServiceValidationError, match="no meter value"):
         await hass.services.async_call(
             DOMAIN, "set_reading", {"date": "2026-08-12"}, blocking=True
@@ -1711,8 +1711,8 @@ async def test_set_reading_without_m3_and_without_recorder_data(hass: HomeAssist
 
 async def test_remove_reading(hass: HomeAssistant):
     entry = await _entry(hass, [
-        {"date": "2026-07-10", "m3": "2611", "source": "manual"},
-        {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+        {"date": "2026-07-10", "m3": "512", "source": "manual"},
+        {"date": "2026-08-12", "m3": "536", "source": "manual"},
     ])
     await hass.services.async_call(
         DOMAIN, "remove_reading", {"date": "2026-07-10"}, blocking=True
@@ -1722,7 +1722,7 @@ async def test_remove_reading(hass: HomeAssistant):
 
 
 async def test_remove_missing_reading_raises(hass: HomeAssistant):
-    await _entry(hass, [{"date": "2026-08-12", "m3": "2631", "source": "manual"}])
+    await _entry(hass, [{"date": "2026-08-12", "m3": "536", "source": "manual"}])
     with pytest.raises(ServiceValidationError, match="no reading"):
         await hass.services.async_call(
             DOMAIN, "remove_reading", {"date": "2026-01-01"}, blocking=True
@@ -1731,7 +1731,7 @@ async def test_remove_missing_reading_raises(hass: HomeAssistant):
 
 async def test_set_next_reading_date_and_clear(hass: HomeAssistant):
     entry = await _entry(hass, [
-        {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+        {"date": "2026-08-12", "m3": "536", "source": "manual"},
     ])
     await hass.services.async_call(
         DOMAIN, "set_next_reading_date", {"date": "2026-09-03"}, blocking=True
@@ -1745,7 +1745,7 @@ async def test_set_next_reading_date_and_clear(hass: HomeAssistant):
 
 
 async def test_set_next_reading_date_before_last_reading_rejected(hass: HomeAssistant):
-    await _entry(hass, [{"date": "2026-08-12", "m3": "2631", "source": "manual"}])
+    await _entry(hass, [{"date": "2026-08-12", "m3": "536", "source": "manual"}])
     with pytest.raises(ServiceValidationError, match="must be after"):
         await hass.services.async_call(
             DOMAIN, "set_next_reading_date", {"date": "2026-08-01"}, blocking=True
@@ -1764,7 +1764,7 @@ async def test_service_requires_config_entry_when_ambiguous(hass: HomeAssistant)
     await hass.async_block_till_done()
     with pytest.raises(ServiceValidationError, match="config_entry"):
         await hass.services.async_call(
-            DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 2631}, blocking=True
+            DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 536}, blocking=True
         )
 ```
 
@@ -1979,7 +1979,7 @@ set_reading:
         date:
     m3:
       required: false
-      example: 2631
+      example: 536
       selector:
         number:
           min: 0
@@ -2160,7 +2160,7 @@ Remove the **Reset day** bullet. The initial setup form now asks only for the so
 action: agere_water.set_reading
 data:
   date: "2026-08-12"
-  m3: 2631
+  m3: 536
 ```
 
   and a note that the action returns the recomputed period, so the result can be compared against the invoice on the spot.
@@ -2177,7 +2177,7 @@ Replace the current text. The first cycle is partial only **until you enter the 
 - [ ] **Step 3: Add the third invoice to Accuracy**
 
 ```markdown
-- 20 m³ over 33 days → 45.53 € total (tier limits prorated to 6/11/17/28 m³
+- 24 m³ over 33 days → 55.82 € total (tier limits prorated to 6/11/17/28 m³
   for the 33-day cycle).
 ```
 
@@ -2208,9 +2208,10 @@ Under a new `## [Unreleased]` heading, following the file's existing style. Do *
 - Test suite now runs in CI on Python 3.13.
 
 ### Fixed
-- Period length no longer assumes a calendar month. On invoice
-  042.DP.26080422002962699 (20 m³ over 33 days) the computed total was 46.99 €
-  against 45.53 € billed; it is now exact.
+- Period length no longer assumes a calendar month. A period whose meter
+  readings are 33 days apart was being computed as a 31-day calendar month,
+  which prorates the consumption tiers wrongly and overstated the total by more
+  than a euro.
 ```
 
 - [ ] **Step 6: Verify**

@@ -12,10 +12,10 @@ from custom_components.agere_water.const import (
     CONF_SOURCE, CONF_TAXES, CONF_VAT_RATE, CONF_WASTE, CONF_WATER, DOMAIN,
 )
 
-INVOICE_READINGS = [
-    {"date": "2026-06-12", "m3": "2593", "source": "manual"},
-    {"date": "2026-07-10", "m3": "2611", "source": "manual"},
-    {"date": "2026-08-12", "m3": "2631", "source": "manual"},
+READINGS = [
+    {"date": "2026-06-12", "m3": "500", "source": "manual"},
+    {"date": "2026-07-10", "m3": "512", "source": "manual"},
+    {"date": "2026-08-12", "m3": "536", "source": "manual"},
 ]
 
 
@@ -39,7 +39,7 @@ async def _setup(hass: HomeAssistant, meter_state: str, **extra_options):
 
 
 async def test_sensors_created(hass: HomeAssistant):
-    await _setup(hass, "2631", **{CONF_READINGS: INVOICE_READINGS})
+    await _setup(hass, "536", **{CONF_READINGS: READINGS})
     for entity_id in (
         "sensor.agere_total_cost", "sensor.agere_marginal_price",
         "sensor.agere_cycle_consumption", "sensor.agere_water_cost",
@@ -48,24 +48,24 @@ async def test_sensors_created(hass: HomeAssistant):
         assert hass.states.get(entity_id) is not None
 
 
-async def test_last_invoice_reproduces_both_closed_cycles(hass: HomeAssistant):
-    await _setup(hass, "2631", **{CONF_READINGS: INVOICE_READINGS})
+async def test_last_invoice_exposes_every_closed_cycle(hass: HomeAssistant):
+    await _setup(hass, "536", **{CONF_READINGS: READINGS})
     state = hass.states.get("sensor.agere_last_invoice")
-    assert Decimal(state.state) == Decimal("45.53")
+    assert Decimal(state.state) == Decimal("55.82")
     cycles = state.attributes["cycles"]
     assert cycles[0] == {
         "start": "2026-06-13", "end": "2026-07-10",
-        "days": 28, "m3": 18.0, "total": 44.21,
+        "days": 28, "m3": 12.0, "total": 30.95,
     }
     assert cycles[1] == {
         "start": "2026-07-11", "end": "2026-08-12",
-        "days": 33, "m3": 20.0, "total": 45.53,
+        "days": 33, "m3": 24.0, "total": 55.82,
     }
 
 
 async def test_current_cycle_uses_next_reading_date(hass: HomeAssistant):
-    await _setup(hass, "2638", **{
-        CONF_READINGS: INVOICE_READINGS,
+    await _setup(hass, "543", **{
+        CONF_READINGS: READINGS,
         CONF_NEXT_READING_DATE: "2026-09-03",
     })
     attrs = hass.states.get("sensor.agere_total_cost").attributes
@@ -78,7 +78,7 @@ async def test_current_cycle_uses_next_reading_date(hass: HomeAssistant):
 
 
 async def test_current_cycle_estimated_without_next_reading_date(hass: HomeAssistant):
-    await _setup(hass, "2638", **{CONF_READINGS: INVOICE_READINGS})
+    await _setup(hass, "543", **{CONF_READINGS: READINGS})
     attrs = hass.states.get("sensor.agere_total_cost").attributes
     assert attrs["billing_days"] == 33          # learned from the previous cycle
     assert attrs["billing_days_estimated"] is True
@@ -86,12 +86,12 @@ async def test_current_cycle_estimated_without_next_reading_date(hass: HomeAssis
 
 
 async def test_total_cost_recomputes_on_source_change(hass: HomeAssistant):
-    await _setup(hass, "2631", **{
-        CONF_READINGS: INVOICE_READINGS,
+    await _setup(hass, "536", **{
+        CONF_READINGS: READINGS,
         CONF_NEXT_READING_DATE: "2026-09-03",
     })
     before = Decimal(hass.states.get("sensor.agere_total_cost").state)
-    hass.states.async_set("sensor.water_meter_total", "2636",
+    hass.states.async_set("sensor.water_meter_total", "541",
                           {"unit_of_measurement": "m³"})
     await hass.async_block_till_done()
     assert hass.states.get("sensor.agere_cycle_consumption").state == "5.0"
@@ -99,26 +99,26 @@ async def test_total_cost_recomputes_on_source_change(hass: HomeAssistant):
 
 
 async def test_empty_log_seeds_an_auto_reading(hass: HomeAssistant):
-    entry = await _setup(hass, "2631")
+    entry = await _setup(hass, "536")
     await hass.async_block_till_done()
     stored = entry.options[CONF_READINGS]
     assert len(stored) == 1
-    assert stored[0]["m3"] == "2631"
+    assert stored[0]["m3"] == "536"
     assert stored[0]["source"] == "auto"
 
 
 async def test_seeding_does_not_repeat(hass: HomeAssistant):
-    entry = await _setup(hass, "2631")
+    entry = await _setup(hass, "536")
     await hass.async_block_till_done()
-    hass.states.async_set("sensor.water_meter_total", "2635",
+    hass.states.async_set("sensor.water_meter_total", "540",
                           {"unit_of_measurement": "m³"})
     await hass.async_block_till_done()
     assert len(entry.options[CONF_READINGS]) == 1
 
 
 async def test_malformed_readings_do_not_break_setup(hass: HomeAssistant):
-    await _setup(hass, "2631", **{
-        CONF_READINGS: [{"date": "not-a-date", "m3": "2631"}],
+    await _setup(hass, "536", **{
+        CONF_READINGS: [{"date": "not-a-date", "m3": "536"}],
     })
     assert hass.states.get("sensor.agere_total_cost") is not None
 
@@ -127,8 +127,8 @@ async def test_monetary_sensors_use_total_with_last_reset(hass: HomeAssistant):
     """device_class monetary forbids total_increasing; the per-period reset is
     carried by last_reset instead. An invalid pair leaves the sensor without
     long-term statistics, which is what the Energy dashboard reads."""
-    await _setup(hass, "2638", **{
-        CONF_READINGS: INVOICE_READINGS,
+    await _setup(hass, "543", **{
+        CONF_READINGS: READINGS,
         CONF_NEXT_READING_DATE: "2026-09-03",
     })
     for entity_id in (
@@ -143,7 +143,7 @@ async def test_monetary_sensors_use_total_with_last_reset(hass: HomeAssistant):
 
 
 async def test_consumption_sensor_keeps_total_increasing(hass: HomeAssistant):
-    await _setup(hass, "2638", **{CONF_READINGS: INVOICE_READINGS})
+    await _setup(hass, "543", **{CONF_READINGS: READINGS})
     attrs = hass.states.get("sensor.agere_cycle_consumption").attributes
     assert attrs["device_class"] == "water"
     assert attrs["state_class"] == "total_increasing"   # valid for water
