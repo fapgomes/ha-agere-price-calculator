@@ -133,6 +133,19 @@ def test_decreasing_m3_rejected():
         ])
 
 
+def test_decreasing_m3_error_names_both_readings():
+    """The message is surfaced verbatim in the UI, so it must say which two
+    readings conflict and with what values."""
+    with pytest.raises(ValueError) as excinfo:
+        ReadingLog([
+            Reading(date(2025, 1, 13), Decimal("12.0")),
+            Reading(date(2025, 2, 12), Decimal("11")),
+        ])
+    message = str(excinfo.value)
+    for fragment in ("2025-02-12", "11", "2025-01-13", "12.0"):
+        assert fragment in message
+
+
 def test_negative_m3_rejected():
     with pytest.raises(ValueError, match="negative"):
         ReadingLog([Reading(date(2026, 8, 12), Decimal("-1"))])

@@ -155,3 +155,19 @@ async def test_set_and_clear_next_reading_date(hass: HomeAssistant):
     )
     await hass.async_block_till_done()
     assert entry.options[CONF_NEXT_READING_DATE] is None
+
+
+async def test_invalid_edit_surfaces_the_concrete_reason(hass: HomeAssistant):
+    """The form must say WHICH readings conflict — a generic 'invalid' message
+    leaves the user guessing (e.g. after entering Consumo instead of Leitura)."""
+    entry = await _entry(hass)
+    result = await _open_reading(hass, entry, "2026-08-12")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"date": "2026-08-12", "m3": 2000, "delete": False}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["errors"]["base"] == "invalid_reading"
+    reason = result["description_placeholders"]["error"]
+    assert "2026-08-12" in reason
+    assert "2026-07-10" in reason
+    assert "2611" in reason

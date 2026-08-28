@@ -125,6 +125,7 @@ class AgereWaterOptionsFlow(config_entries.OptionsFlow):
             (r for r in log.readings if r.date.isoformat() == self._selected), None
         )
         errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {}
 
         if user_input is not None:
             new_log = None
@@ -140,8 +141,13 @@ class AgereWaterOptionsFlow(config_entries.OptionsFlow):
                         m3=Decimal(str(user_input["m3"])),
                         source=SOURCE_MANUAL,
                     ))
-            except (InvalidOperation, ValueError):
+            except InvalidOperation:
+                errors["base"] = "invalid_number"
+            except ValueError as err:
+                # Surface the log's own message: it names both conflicting
+                # readings, which is what tells the user what went wrong.
                 errors["base"] = "invalid_reading"
+                placeholders["error"] = str(err)
             if not errors:
                 return self.async_create_entry(
                     title="",
@@ -163,7 +169,8 @@ class AgereWaterOptionsFlow(config_entries.OptionsFlow):
             vol.Required("delete", default=False): bool,
         })
         return self.async_show_form(
-            step_id="reading_edit", data_schema=schema, errors=errors
+            step_id="reading_edit", data_schema=schema, errors=errors,
+            description_placeholders=placeholders,
         )
 
     # --- next reading date ---

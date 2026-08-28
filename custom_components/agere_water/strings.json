@@ -22,17 +22,17 @@
       },
       "readings": {
         "title": "Readings",
-        "description": "Each reading is the END of a billing period — the 'Leitura' date on your invoice, not the invoice date. Pick one to edit or delete it.",
+        "description": "Each reading is the END of a billing period — the 'Leitura' date on your invoice, not the invoice date — paired with the cumulative meter total. Pick one to edit or delete it.",
         "data": {
           "reading": "Reading"
         }
       },
       "reading_edit": {
         "title": "Reading",
-        "description": "Date of the meter reading (end of the billing period) and the meter value in m³, both as printed on the AGERE invoice.",
+        "description": "Date of the meter reading (end of the billing period) and the meter total in m³, both as printed on the AGERE invoice. Use the invoice's 'Leitura' value — the cumulative meter total, e.g. 2631 — and NOT the 'Consumo' value, which is only that period's usage.",
         "data": {
           "date": "Reading date (end of billing period)",
-          "m3": "Meter reading (m³)",
+          "m3": "Meter total in m³ ('Leitura', not 'Consumo')",
           "delete": "Delete this reading"
         }
       },
@@ -57,7 +57,8 @@
       }
     },
     "error": {
-      "invalid_reading": "Invalid reading: dates must stay in order and meter values must not decrease."
+      "invalid_reading": "{error}. Enter the cumulative meter total (the invoice's 'Leitura' value), not the period's consumption ('Consumo').",
+      "invalid_number": "That meter value is not a valid number."
     }
   },
   "services": {

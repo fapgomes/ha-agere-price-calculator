@@ -182,9 +182,15 @@ Período de Comunicação 2026-09-02 ~ 2026-09-04
 | `m3` | The `Leitura` value — the meter total, not the period's consumption. | `2631` |
 | next reading date | `Período de Comunicação`. Optional; pick a day inside the window. | `2026-09-03` |
 
-Getting the date wrong by a single day changes the period length, which can
-move a consumption tier and shift the total by more than a euro. It is the one
-value worth double-checking.
+Two traps, both easy to fall into:
+
+- **`Leitura` vs `Consumo`.** The invoice prints them side by side. `m3` wants
+  the cumulative meter total (`2631`), never the period's usage (`20`). Enter
+  consumption values and the readings stop increasing, which the integration
+  rejects — or, worse, silently accepts if that month's usage happens to be
+  higher than the previous month's.
+- **The date.** One day off changes the period length, which can move a
+  consumption tier and shift the total by more than a euro.
 
 #### Adding your first readings
 
