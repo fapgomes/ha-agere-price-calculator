@@ -144,32 +144,70 @@ which you add next.
 ### Billing periods
 
 AGERE does not bill on a fixed day of the month — it bills **between meter
-reading dates**, and those drift. Three consecutive invoices gave periods of
-28, 33 and ~22 days. The integration therefore derives each period from the
-readings you enter, one per invoice.
-
-> **The date to enter is the END of the billing period** — the `Leitura` date
-> (equivalently, the end of `Período Faturação`), **not** the invoice date.
-> On a 2026-08-13 invoice covering `2026-07-11 ~ 2026-08-12`, the date is
-> `2026-08-12`. A day's difference shifts the period length and can move a
-> consumption tier.
-
-**Interactive editing** — **Configure** on the integration entry →
-**Readings**. The list shows each stored reading with the period it produces,
-and you can add, edit or delete any of them, including past months:
+reading dates**, and those dates drift. Three consecutive invoices gave
+periods of 28, 33 and ~22 days. So each period is derived from the readings
+you enter, one per invoice:
 
 ```
-2026-08-12 · 2631 m³ · 33 d · 20 m³
-2026-07-10 · 2611 m³ · 28 d · 18 m³
-➕ New reading
+reading n-1            reading n
+2026-07-10 (2611 m³)   2026-08-12 (2631 m³)
+     └──── period: 2026-07-11 → 2026-08-12 = 33 days, 20 m³ ────┘
 ```
 
-**Configure → Next reading date** takes the *Período de Comunicação* date
-from your invoice, so the period in progress has an exact length instead of
-one estimated from the previous period.
+The tier limits are prorated by that length, which is what makes the total
+match the invoice to the cent.
 
-**Bulk entry from past invoices** — **Developer tools → Actions**, in YAML
-mode, one call per invoice:
+#### Where to find the values on your invoice
+
+Only two numbers per invoice, plus one optional date. On page 2 of the AGERE
+`Documento de Pagamento`:
+
+```
+Fatura FAC 0210422026/0049297324
+Data de Fatura         2026-08-13      ← NOT this one
+Período                2026-07-11 ~ 2026-08-12
+Contador C10EB030162   2026-08-12      Leitura 2631      Consumo 20,00 m3
+                           ▲                    ▲
+                          date                 m3
+
+Comunicação de Leituras
+Período de Comunicação 2026-09-02 ~ 2026-09-04
+                           ▲
+                   next reading date (optional)
+```
+
+| What you enter | Where it comes from | Example |
+|---|---|---|
+| `date` | The **`Leitura` date** = end of `Período`. **Not** `Data de Fatura`, which is usually a day later. | `2026-08-12` |
+| `m3` | The `Leitura` value — the meter total, not the period's consumption. | `2631` |
+| next reading date | `Período de Comunicação`. Optional; pick a day inside the window. | `2026-09-03` |
+
+Getting the date wrong by a single day changes the period length, which can
+move a consumption tier and shift the total by more than a euro. It is the one
+value worth double-checking.
+
+#### Adding your first readings
+
+Each period needs the reading that **opens** it and the one that **closes**
+it, so *n* invoices give *n−1* complete periods. To reconstruct 2 periods,
+enter 3 readings.
+
+Go to **Developer tools → Actions**, pick *AGERE Water Price: Set meter
+reading*, and switch to YAML mode. Then, oldest invoice first:
+
+```yaml
+action: agere_water.set_reading
+data:
+  date: "2026-06-12"
+  m3: 2593
+```
+
+```yaml
+action: agere_water.set_reading
+data:
+  date: "2026-07-10"
+  m3: 2611
+```
 
 ```yaml
 action: agere_water.set_reading
@@ -178,8 +216,9 @@ data:
   m3: 2631
 ```
 
-The action returns the recomputed period, so you can compare it against the
-invoice on the spot:
+Every call answers with the **most recent complete period** — the one ending
+at your newest reading — so after the last call you can compare it with that
+invoice without leaving the page:
 
 ```yaml
 cycle:
@@ -195,14 +234,73 @@ cycle:
   vat: 2.25
 ```
 
-Leave `m3` out and the meter value is taken from the source sensor's recorded
-history for that date; supply it (from the invoice) when the history does not
-go back that far, or to match AGERE's own reading exactly.
+Finally, tell it when the current period closes, so its length is exact
+rather than estimated:
 
-Two more actions round it out: `agere_water.remove_reading` (field: `date`)
-and `agere_water.set_next_reading_date` (field: `date`, empty to clear). All
-three take an optional `config_entry`, needed only if you run more than one
-AGERE entry.
+```yaml
+action: agere_water.set_next_reading_date
+data:
+  date: "2026-09-03"
+```
+
+Order does not matter: readings are sorted by date whatever sequence you enter
+them in. Note that the response always describes the newest complete period,
+not the one the call happened to create, and that a single reading on its own
+produces no complete period yet, so the response comes back empty. To check an
+older invoice, look at the `cycles` attribute of `sensor.agere_last_invoice`,
+which lists every period.
+
+If you are upgrading from a version that used a reset day, the migration
+leaves one reading marked `auto`, carrying the meter's own value at the old
+cycle boundary (e.g. `2631.61791992188`). Entering the invoice reading for
+that same date replaces it and aligns the period with AGERE exactly.
+
+#### Every month, when a new invoice arrives
+
+Two calls, or the same thing through the UI:
+
+```yaml
+action: agere_water.set_reading
+data: {date: "2026-09-03", m3: 2643}     # closes the period
+```
+```yaml
+action: agere_water.set_next_reading_date
+data: {date: "2026-10-02"}               # opens the next one
+```
+
+The closed period then shows up in `sensor.agere_last_invoice`, whose
+`cycles` attribute keeps every period reconstructed so far.
+
+#### Editing readings in the UI
+
+**Settings → Devices & Services → AGERE Water Price → Configure →
+Readings.** The dropdown lists what is stored, each row annotated with the
+period it produces:
+
+```
+2026-08-12 · 2631 m³ · 33 d · 20 m³
+2026-07-10 · 2611 m³ · 28 d · 18 m³
+2026-06-12 · 2593 m³
+➕ New reading
+```
+
+Pick a row to change its date or value, or tick **Delete this reading**. This
+works for past months too: a reading's date is the boundary between two
+periods, so changing it recomputes both sides.
+
+Two rules are enforced, and a violation is shown in the form without saving
+anything: dates must stay in order, and meter values must never decrease.
+
+#### Actions reference
+
+| Action | Fields | Notes |
+|---|---|---|
+| `agere_water.set_reading` | `date` (required), `m3` (optional) | Adds a reading, or replaces the one with that date. Omit `m3` and the value is read from the source sensor's recorded history for that day; supply it to match AGERE exactly, or when the history does not reach that far back. Returns the recomputed period. |
+| `agere_water.remove_reading` | `date` (required) | Deletes that reading. The two periods around it merge into one. |
+| `agere_water.set_next_reading_date` | `date` (optional) | Sets when the current period closes. Leave `date` out to clear it and go back to estimating from the previous period. |
+
+All three accept an optional `config_entry`, needed only if you run more than
+one AGERE entry.
 
 ### Options
 
