@@ -14,19 +14,21 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
 from homeassistant.util import dt as dt_util
 
-from .calculator import calcular, marginal_price
+from .calculator import allocate, calcular, marginal_price, sub_periods
 from .const import (
     CONF_INCLUDE_VAT, CONF_READINGS, CONF_SANITATION, CONF_SOURCE, CONF_TAXES,
     CONF_VAT_RATE, CONF_WASTE, CONF_WATER, DEFAULT_VAT_RATE, DOMAIN,
-    CalcConfig, Tariff,
+    CalcConfig,
 )
 from .forecast import project_consumption
 from .entry_options import (
     next_reading_date_from_options, readings_from_options, readings_to_options,
+    tariffs_from_options,
 )
 from .readings import (
     SOURCE_AUTO, Cycle, Reading, ReadingLog, days_elapsed, is_overdue,
 )
+from .tariffs import BUILTIN_SCHEDULE, UnknownTariffValue
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,8 +38,16 @@ def _calc_config(options: dict) -> CalcConfig:
         vat_rate = Decimal(str(options.get(CONF_VAT_RATE, DEFAULT_VAT_RATE)))
     except (InvalidOperation, TypeError):
         vat_rate = DEFAULT_VAT_RATE
+    try:
+        schedule = tariffs_from_options(options)
+    except ValueError as err:
+        _LOGGER.error(
+            "Stored AGERE tariffs are invalid (%s); using the built-in schedule",
+            err,
+        )
+        schedule = BUILTIN_SCHEDULE
     return CalcConfig(
-        tariff=Tariff(),
+        schedule=schedule,
         include_water=options.get(CONF_WATER, True),
         include_sanitation=options.get(CONF_SANITATION, True),
         include_waste=options.get(CONF_WASTE, True),
@@ -72,6 +82,9 @@ class _AgereData:
         self.cycle: Cycle | None = None
         self.breakdown = None
         self.closed: list[tuple] = []
+        self.errors: dict = {}
+        self.sub_periods: list = []
+        self.tariff_from = None
         self.marginal = Decimal("0")
         self.days_elapsed = 0
         self.overdue = False
@@ -102,21 +115,52 @@ class _AgereData:
         self.cycle = self.log.current_cycle(meter_total, self.next_reading_date)
         self.days_elapsed = days_elapsed(self.cycle, today)
         self.overdue = is_overdue(self.cycle, today)
-        self.breakdown = calcular(self.cycle.consumption, self.cycle.days, self.config)
-        self.marginal = marginal_price(
-            self.cycle.consumption, self.cycle.days, self.config
+        cyc = self.cycle
+        try:
+            self.breakdown = calcular(
+                cyc.start, cyc.end, cyc.consumption, self.config
+            )
+            self.marginal = marginal_price(
+                cyc.start, cyc.end, cyc.consumption, today, self.config
+            )
+        except ValueError as err:
+            _LOGGER.error("Cannot cost the current period: %s", err)
+            self.breakdown = None
+            self.marginal = Decimal("0")
+
+        changes = self.config.schedule.change_dates_for("water", cyc.start, cyc.end)
+        subs = sub_periods(cyc.start, cyc.end, changes)
+        self.sub_periods = list(zip(subs, allocate(cyc.consumption, subs)))
+        self.tariff_from = next(
+            p.effective_from for p in reversed(self.config.schedule.periods)
+            if p.effective_from <= cyc.end
         )
+
         closed_cycles = self.log.closed_cycles()
-        self.closed = [
-            (c, calcular(c.consumption, c.days, self.config)) for c in closed_cycles
-        ]
+        self.closed = []
+        self.errors = {}
+        for c in closed_cycles:
+            try:
+                self.closed.append(
+                    (c, calcular(c.start, c.end, c.consumption, self.config))
+                )
+            except ValueError as err:
+                # One uncostable period must not take the rest of the history
+                # with it.
+                self.closed.append((c, None))
+                self.errors[c.end] = str(err)
         # Continuous, not the whole-day count: an integer makes the projection
         # step down by a day of historical consumption at every midnight.
         elapsed = Decimal(
             int((now - dt_util.start_of_local_day(self.cycle.start)).total_seconds())
         ) / Decimal(86400)
         self.projected_m3 = project_consumption(self.cycle, elapsed, closed_cycles)
-        self.forecast = calcular(self.projected_m3, self.cycle.days, self.config)
+        try:
+            self.forecast = calcular(
+                cyc.start, cyc.end, self.projected_m3, self.config
+            )
+        except ValueError:
+            self.forecast = None
         for cb in self._listeners:
             cb()
 
@@ -228,9 +272,12 @@ class AgereTotalCostSensor(_AgereCycleMonetary):
     def extra_state_attributes(self):
         bd = self._data.breakdown
         cycle = self._data.cycle
-        if not bd or cycle is None:
+        if not bd or cycle is None or self._data.tariff_from is None:
             return None
-        active_tiers = [line.index + 1 for line in bd.lines if line.qty > 0]
+        tiers = [
+            int(l.component.rsplit("_", 1)[1])
+            for l in bd.lines if l.component.startswith("water_tier")
+        ]
         return {
             "base_without_vat": float(bd.base_without_vat),
             "vat": float(bd.vat),
@@ -249,15 +296,25 @@ class AgereTotalCostSensor(_AgereCycleMonetary):
                 self._data.next_reading_date.isoformat()
                 if self._data.next_reading_date else None
             ),
-            "current_tier": active_tiers[-1] if active_tiers else 1,
-            "tiers": [
+            "current_tier": tiers[-1] if tiers else 1,
+            "tariff_effective_from": self._data.tariff_from.isoformat(),
+            "tariff_split": len(self._data.sub_periods) > 1,
+            "sub_periods": [
+                {"start": s.start.isoformat(), "end": s.end.isoformat(),
+                 "days": s.days, "m3": float(q)}
+                for s, q in self._data.sub_periods
+            ] if len(self._data.sub_periods) > 1 else [],
+            "lines": [
                 {
-                    "tier": line.index + 1,
-                    "m3": float(line.qty),
-                    "eur_per_m3": float(line.rate),
-                    "eur": float(line.value),
+                    "component": l.component,
+                    "start": l.start.isoformat() if l.start else None,
+                    "end": l.end.isoformat() if l.end else None,
+                    "m3": float(l.qty),
+                    "eur_per_m3": float(l.rate),
+                    "eur": float(l.value),
+                    "vat": l.vat,
                 }
-                for line in bd.lines
+                for l in bd.lines
             ],
         }
 
@@ -330,25 +387,25 @@ class AgereLastInvoiceSensor(_AgereBase):
 
     @property
     def native_value(self):
-        if not self._data.closed:
-            return None
-        return float(self._data.closed[-1][1].total)
+        costed = [bd for _, bd in self._data.closed if bd is not None]
+        return float(costed[-1].total) if costed else None
 
     @property
     def extra_state_attributes(self):
-        return {
-            "cycles": [
-                {
-                    "start": cycle.start.isoformat(),
-                    "end": cycle.end.isoformat(),
-                    "days": cycle.days,
-                    "m3": float(cycle.consumption),
-                    "total": float(bd.total),
-                }
-                for cycle, bd in self._data.closed
-            ],
-            "readings": readings_to_options(self._data.log),
-        }
+        cycles = []
+        for cycle, bd in self._data.closed:
+            entry = {
+                "start": cycle.start.isoformat(),
+                "end": cycle.end.isoformat(),
+                "days": cycle.days,
+                "m3": float(cycle.consumption),
+            }
+            if bd is None:
+                entry["error"] = self._data.errors.get(cycle.end, "not calculated")
+            else:
+                entry["total"] = float(bd.total)
+            cycles.append(entry)
+        return {"cycles": cycles, "readings": readings_to_options(self._data.log)}
 
 
 class AgereForecastSensor(_AgereBase):

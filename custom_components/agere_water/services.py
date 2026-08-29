@@ -97,13 +97,23 @@ def _cycle_response(options: dict) -> dict:
     if not closed:
         return {}
     cycle = closed[-1]
-    bd = calcular(cycle.consumption, cycle.days, _calc_config(options))
+    config = _calc_config(options)
+    try:
+        bd = calcular(cycle.start, cycle.end, cycle.consumption, config)
+    except ValueError as err:
+        return {"cycle": {
+            "start": cycle.start.isoformat(), "end": cycle.end.isoformat(),
+            "days": cycle.days, "consumption_m3": float(cycle.consumption),
+            "error": str(err),
+        }}
+    changes = config.schedule.change_dates_for("water", cycle.start, cycle.end)
     return {
         "cycle": {
             "start": cycle.start.isoformat(),
             "end": cycle.end.isoformat(),
             "days": cycle.days,
             "consumption_m3": float(cycle.consumption),
+            "tariff_split": bool(changes),
             "total": float(bd.total),
             "water": float(bd.water),
             "sanitation": float(bd.sanitation),

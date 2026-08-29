@@ -42,8 +42,9 @@ async def test_set_reading_inserts_and_returns_the_cycle(hass: HomeAssistant):
     await hass.async_block_till_done()
     assert response["cycle"] == {
         "start": "2026-07-11", "end": "2026-08-12", "days": 33,
-        "consumption_m3": 24.0, "total": 55.82, "water": 29.53,
-        "sanitation": 16.42, "waste": 2.88, "taxes": 4.16, "vat": 2.83,
+        "consumption_m3": 24.0, "tariff_split": False, "total": 55.82,
+        "water": 29.53, "sanitation": 16.42, "waste": 2.88, "taxes": 4.16,
+        "vat": 2.83,
     }
     assert entry.options[CONF_READINGS][-1]["m3"] == "536"
 
@@ -133,3 +134,20 @@ async def test_service_requires_config_entry_when_ambiguous(hass: HomeAssistant)
         await hass.services.async_call(
             DOMAIN, "set_reading", {"date": "2026-08-12", "m3": 536}, blocking=True
         )
+
+
+async def test_set_reading_response_reports_the_split(hass: HomeAssistant):
+    """A period crossing 2026-02-01 is flagged, so the response says why its
+    lines will not look like a single-tariff period's."""
+    await _entry(hass, [
+        {"date": "2026-01-19", "m3": "500", "source": "manual"},
+    ])
+    response = await hass.services.async_call(
+        DOMAIN, "set_reading", {"date": "2026-02-15", "m3": 515},
+        blocking=True, return_response=True,
+    )
+    await hass.async_block_till_done()
+    assert response["cycle"]["days"] == 27
+    assert response["cycle"]["consumption_m3"] == 15.0
+    assert response["cycle"]["tariff_split"] is True
+    assert response["cycle"]["total"] == 35.80

@@ -214,3 +214,59 @@ async def test_days_elapsed_attribute_stays_a_whole_number(hass: HomeAssistant, 
         CONF_NEXT_READING_DATE: "2026-09-03",
     })
     assert hass.states.get("sensor.agere_total_cost").attributes["days_elapsed"] == 15
+
+
+async def test_total_cost_reports_the_tariff_and_the_split(hass: HomeAssistant):
+    await _setup(hass, "543", **{
+        CONF_READINGS: READINGS,
+        CONF_NEXT_READING_DATE: "2026-09-03",
+    })
+    a = hass.states.get("sensor.agere_total_cost").attributes
+    assert a["tariff_effective_from"] == "2026-02-01"
+    assert a["tariff_split"] is False
+    assert a["sub_periods"] == []
+
+
+async def test_total_cost_lines_replace_the_tiers_attribute(hass: HomeAssistant):
+    await _setup(hass, "543", **{
+        CONF_READINGS: READINGS,
+        CONF_NEXT_READING_DATE: "2026-09-03",
+    })
+    a = hass.states.get("sensor.agere_total_cost").attributes
+    assert "tiers" not in a
+    lines = a["lines"]
+    assert {l["component"] for l in lines} >= {
+        "water_tier_1", "water_availability", "sanitation_drainage",
+        "waste_fixed", "tax_waste_mgmt",
+    }
+    fixed = next(l for l in lines if l["component"] == "waste_fixed")
+    assert fixed["start"] is None
+    assert fixed["vat"] is False
+
+
+async def test_last_invoice_costs_old_periods_with_the_old_tariff(hass: HomeAssistant):
+    """Two readings 30 days apart in 2025 must use the 2025 prices."""
+    await _setup(hass, "543", **{CONF_READINGS: [
+        {"date": "2025-03-01", "m3": "100", "source": "manual"},
+        {"date": "2025-03-31", "m3": "120", "source": "manual"},
+    ]})
+    cycle = hass.states.get("sensor.agere_last_invoice").attributes["cycles"][0]
+    assert cycle["days"] == 30
+    assert cycle["m3"] == 20.0
+    # 2025 prices, not 2026: the 2026 tariff would give 48.06
+    assert cycle["total"] == 44.41
+
+
+async def test_last_invoice_marks_a_period_it_cannot_cost(hass: HomeAssistant):
+    """30 m3 in a 2025 period reaches the >25 tier, whose price is unknown. That
+    period reports an error; the others keep their totals."""
+    await _setup(hass, "543", **{CONF_READINGS: [
+        {"date": "2025-03-01", "m3": "100", "source": "manual"},
+        {"date": "2025-03-31", "m3": "130", "source": "manual"},
+        {"date": "2025-04-30", "m3": "140", "source": "manual"},
+    ]})
+    cycles = hass.states.get("sensor.agere_last_invoice").attributes["cycles"]
+    assert "error" in cycles[0]
+    assert "tier 5" in cycles[0]["error"]
+    assert "total" not in cycles[0]
+    assert "total" in cycles[1]
