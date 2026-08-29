@@ -17,6 +17,7 @@
         "menu_options": {
           "readings": "Readings",
           "next_reading": "Next reading date",
+          "tariffs": "Tariffs",
           "components": "Charges and VAT"
         }
       },
@@ -44,6 +45,35 @@
           "clear": "Clear and estimate instead"
         }
       },
+      "tariffs": {
+        "title": "Tariffs",
+        "description": "AGERE changes its tariff on dates that differ per component and never on the calendar year. Each entry holds a complete set of values from its effective date onwards. Pick one to edit or delete it.",
+        "data": {
+          "tariff": "Effective from"
+        }
+      },
+      "tariff_edit": {
+        "title": "Tariff",
+        "description": "Values as printed in the invoice's 'Valor Unit.' column. A new entry starts pre-filled from the most recent one, so only what changed needs typing. Leave the top water tier empty if you do not know its price — it is better than guessing.",
+        "data": {
+          "effective_from": "Effective from",
+          "water_tier_bounds": "Tier bounds in m³, comma separated (e.g. 5,10,15,25)",
+          "water_tier_price_1": "Water 0-5 m³ (€/m³)",
+          "water_tier_price_2": "Water 5-10 m³ (€/m³)",
+          "water_tier_price_3": "Water 10-15 m³ (€/m³)",
+          "water_tier_price_4": "Water 15-25 m³ (€/m³)",
+          "water_tier_price_5": "Water above 25 m³ (€/m³), empty if unknown",
+          "water_availability": "Water availability (€/period)",
+          "sanitation_drainage": "Sanitation drainage (€/m³)",
+          "sanitation_availability": "Sanitation availability (€/period)",
+          "waste_variable": "Waste, variable (€/m³)",
+          "waste_fixed": "Waste, fixed (€/period)",
+          "tax_water": "Water resources tax (€/m³)",
+          "tax_sanitation": "Sanitation resources tax (€/m³)",
+          "tax_waste_mgmt": "Waste management tax (€/period)",
+          "delete": "Delete this tariff"
+        }
+      },
       "components": {
         "title": "Charges and VAT",
         "data": {
@@ -58,7 +88,8 @@
     },
     "error": {
       "invalid_reading": "{error}. Enter the cumulative meter total (the invoice's 'Leitura' value), not the period's consumption ('Consumo').",
-      "invalid_number": "That meter value is not a valid number."
+      "invalid_number": "That meter value is not a valid number.",
+      "invalid_tariff": "{error}"
     }
   },
   "services": {
