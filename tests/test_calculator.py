@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
@@ -8,7 +9,7 @@ from custom_components.agere_water.calculator import (
 )
 from custom_components.agere_water.const import CalcConfig
 from custom_components.agere_water.tariffs import (
-    BUILTIN_SCHEDULE, UnknownTariffValue,
+    BUILTIN_SCHEDULE, TariffPeriod, TariffSchedule, UnknownTariffValue,
 )
 
 CFG = CalcConfig()
@@ -180,10 +181,20 @@ def test_vat_can_be_switched_off():
 # --- refusals ---
 
 def test_unknown_tier_price_raises_and_names_the_tier():
-    """The >25 m3 tier has no price before 2026-02-01. 30 m3 in 30 days reaches
-    it, so the calculation must refuse instead of undercharging."""
+    """A tariff may carry an unknown price — a user adding an older one can
+    leave it empty. Reaching that tier must refuse rather than undercharge."""
+    gappy = TariffSchedule([TariffPeriod(
+        date(2025, 1, 1),
+        replace(
+            BUILTIN_SCHEDULE.at(date(2025, 6, 1)),
+            water_tier_prices=BUILTIN_SCHEDULE.at(
+                date(2025, 6, 1)
+            ).water_tier_prices[:4] + (None,),
+        ),
+    )])
     with pytest.raises(UnknownTariffValue, match="tier 5"):
-        calcular(date(2025, 3, 1), date(2025, 3, 30), Decimal("30"), CFG)
+        calcular(date(2025, 3, 1), date(2025, 3, 30), Decimal("30"),
+                 CalcConfig(schedule=gappy))
 
 
 def test_a_period_starting_before_the_earliest_tariff_raises():

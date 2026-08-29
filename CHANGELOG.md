@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-08-29
+
+### Fixed
+- The built-in 2025 tariff had no price for the top water tier (above 25 m³),
+  because no invoice on hand ever reached it. It is 2.5114 €/m³, from AGERE's
+  published tariff sheet. A period above 25 m³ before 2026-02-01 now computes
+  instead of reporting an error.
+
+  Existing installs keep the empty value: updates add only effective dates newer
+  than the last one seeded and never rewrite an entry, so fill it in under
+  **Configure → Tariffs**, or delete the affected entries and let them be seeded
+  again.
+
+Checking the published sheets also confirmed every other value in the built-in
+schedule, all thirteen of them for both years, against what had been
+reconstructed from the invoices.
+
 ## [0.3.0] - 2026-08-29
 
 ### Added

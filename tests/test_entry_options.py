@@ -151,11 +151,19 @@ def test_tariffs_roundtrip_the_builtin_schedule():
 
 
 def test_unknown_tier_price_survives_as_null():
-    stored = tariffs_to_options(BUILTIN_SCHEDULE)
-    base = next(t for t in stored if t["effective_from"] == "2024-12-12")
-    assert base["water_tier_prices"][4] is None
+    """An empty price stores as null and comes back as None, so "not known"
+    round-trips rather than becoming zero."""
+    gappy = {**STORED_TARIFF,
+             "water_tier_prices": ["0.508", "0.6636", "0.8605", "1.8765", None]}
+    stored = tariffs_to_options(tariffs_from_options({CONF_TARIFFS: [gappy]}))
+    assert stored[0]["water_tier_prices"][4] is None
     rebuilt = tariffs_from_options({CONF_TARIFFS: stored})
-    assert rebuilt.at(date(2025, 6, 1)).water_tier_prices[4] is None
+    assert rebuilt.at(date(2026, 6, 1)).water_tier_prices[4] is None
+
+
+def test_the_builtin_schedule_has_no_unknown_prices():
+    for entry in tariffs_to_options(BUILTIN_SCHEDULE):
+        assert None not in entry["water_tier_prices"]
 
 
 def test_tariffs_from_options_rejects_a_malformed_date():

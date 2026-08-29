@@ -41,11 +41,22 @@ def test_builtin_2026_02_01_is_the_current_tariff():
     assert t.tax_waste_mgmt == Decimal("2.8821")
 
 
-def test_builtin_leaves_the_top_water_tier_unknown_before_2026_02():
-    """The >25 m3 tier was never billed before 2026-02-01, so it has no value.
-    Inventing one would silently undercharge by 43%."""
-    assert BUILTIN_SCHEDULE.at(date(2025, 6, 1)).water_tier_prices[4] is None
-    assert BUILTIN_SCHEDULE.at(date(2026, 2, 1)).water_tier_prices[4] is not None
+def test_builtin_knows_every_water_tier():
+    """The >25 m3 tier is absent from every invoice on hand — no period reached
+    it — so it came from AGERE's published tariff sheets instead."""
+    assert BUILTIN_SCHEDULE.at(date(2025, 6, 1)).water_tier_prices[4] == Decimal("2.5114")
+    assert BUILTIN_SCHEDULE.at(date(2026, 2, 1)).water_tier_prices[4] == Decimal("2.6852")
+    for period in BUILTIN_SCHEDULE.periods:
+        assert None not in period.tariff.water_tier_prices
+
+
+def test_a_schedule_may_still_carry_an_unknown_price():
+    """The capability stays: a user adding an older tariff can leave a price
+    empty rather than guess it."""
+    unknown = TariffSchedule([TariffPeriod(
+        date(2020, 1, 1), _tariff(water_tier_prices=(Decimal("1"),) * 4 + (None,))
+    )])
+    assert unknown.at(date(2020, 6, 1)).water_tier_prices[4] is None
 
 
 def test_at_picks_the_tariff_in_force():

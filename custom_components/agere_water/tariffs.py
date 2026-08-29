@@ -25,8 +25,9 @@ class UnknownTariffValue(ValueError):
 class Tariff:
     """One complete set of AGERE Doméstico values.
 
-    `water_tier_prices` entries may be None: the >25 m³ tier was never billed
-    before 2026-02-01, and guessing it would silently undercharge.
+    A `water_tier_prices` entry may be None, meaning the price is not known: a
+    user adding an older tariff can leave one empty rather than guess it, and
+    the calculation then refuses that period instead of undercharging.
     """
 
     water_tier_bounds: tuple[int, ...]
@@ -185,7 +186,9 @@ _BASE = Tariff(
     water_tier_prices=(
         Decimal("0.4751"), Decimal("0.6206"), Decimal("0.8048"),
         Decimal("1.7550"),
-        None,  # >25 m³ never billed before 2026-02-01
+        # Absent from every invoice on hand — no period reached it. Taken from
+        # AGERE's published 2025 tariff sheet instead of guessed.
+        Decimal("2.5114"),
     ),
     water_availability=Decimal("4.5476"),
     sanitation_drainage=Decimal("0.4402"),

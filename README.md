@@ -352,13 +352,17 @@ Consumption is shared out in proportion to the days, and the water tiers are
 reprorated and **restart from zero** in each sub-period — the second half of the
 period is back on tier 1. That is what the invoices show.
 
-#### An unknown price
+#### Unknown prices
 
-The top water tier (above 25 m³) has **no known price before 2026-02-01**: it was
-never billed, and the jump from the tier below it is 43%, so guessing would
-understate the total by a plausible-looking amount. A period that reaches it
-reports an error for that period alone — the rest of the history keeps its
-totals — and the message says where to fill the value in.
+A tariff entry may leave a price empty, meaning it is not known. That is not a
+gap to paper over: the jump to the top water tier is 43%, so a guess would
+understate a total by a plausible-looking amount. A period that reaches a tier
+with no price reports an error for that period alone — the rest of the history
+keeps its totals — and the message says where to fill the value in.
+
+Every price in the built-in schedule is known. The values come from AGERE's
+published tariff sheets and were cross-checked line by line against real
+invoices; the two agree everywhere they overlap.
 
 ### Options
 

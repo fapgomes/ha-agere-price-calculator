@@ -9,7 +9,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.agere_water.const import (
     CONF_INCLUDE_VAT, CONF_NEXT_READING_DATE, CONF_READINGS, CONF_SANITATION,
-    CONF_SOURCE, CONF_TAXES, CONF_VAT_RATE, CONF_WASTE, CONF_WATER, DOMAIN,
+    CONF_SOURCE, CONF_TARIFFS, CONF_TARIFFS_SEEDED_THROUGH, CONF_TAXES,
+    CONF_VAT_RATE, CONF_WASTE, CONF_WATER, DOMAIN,
 )
 
 READINGS = [
@@ -257,10 +258,23 @@ async def test_last_invoice_costs_old_periods_with_the_old_tariff(hass: HomeAssi
     assert cycle["total"] == 44.41
 
 
+GAPPY_TARIFF = [{
+    "effective_from": "2025-01-01",
+    "water_tier_bounds": [5, 10, 15, 25],
+    "water_tier_prices": ["0.4751", "0.6206", "0.8048", "1.755", None],
+    "water_availability": "4.5476", "sanitation_drainage": "0.4402",
+    "sanitation_availability": "4.4635", "waste_variable": "0.0136",
+    "waste_fixed": "2.331", "tax_water": "0.0382",
+    "tax_sanitation": "0.015", "tax_waste_mgmt": "2.426",
+}]
+
+
 async def test_last_invoice_marks_a_period_it_cannot_cost(hass: HomeAssistant):
-    """30 m3 in a 2025 period reaches the >25 tier, whose price is unknown. That
-    period reports an error; the others keep their totals."""
-    await _setup(hass, "543", **{CONF_READINGS: [
+    """A tariff whose top tier price was left empty: a period reaching that tier
+    reports an error, and the others keep their totals."""
+    await _setup(hass, "543", **{CONF_TARIFFS: GAPPY_TARIFF,
+                                 CONF_TARIFFS_SEEDED_THROUGH: "2026-02-01",
+                                 CONF_READINGS: [
         {"date": "2025-03-01", "m3": "100", "source": "manual"},
         {"date": "2025-03-31", "m3": "130", "source": "manual"},
         {"date": "2025-04-30", "m3": "140", "source": "manual"},
