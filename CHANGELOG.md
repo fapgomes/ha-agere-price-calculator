@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Tariff schedule: the integration now knows AGERE's tariff values by effective
+  date and applies the one in force for each billing period, so historical
+  periods compute with historical prices. Four effective dates ship built in,
+  reconstructed from real Doméstico invoices, and they are editable under
+  **Configure → Tariffs**. Updates add only dates newer than the last one
+  seeded, never overwriting an edit or restoring a deletion.
+- `sensor.agere_total_cost` gained `tariff_effective_from`, `tariff_split` and
+  `sub_periods`.
+- README example of an apexcharts card that plots the cost of every billing
+  period from the `cycles` attribute, with the period in progress alongside.
+
+### Changed
+- **Breaking:** the `tiers` attribute of `sensor.agere_total_cost` is replaced by
+  `lines`, which carries every charge with its component, sub-period, quantity,
+  rate, value and VAT liability — the same structure as an invoice line.
+- Each entry in the `cycles` attribute of `sensor.agere_last_invoice` now has
+  `total` **or** `error`. A period whose tariff has an unknown value reports the
+  reason instead of taking the rest of the history down with it.
+
 ### Fixed
+- A billing period crossing a tariff change is now split the way AGERE splits it:
+  per component, at the dates that component's own rate changes, with the water
+  tiers reprorated and restarted in each sub-period and the fixed charges billed
+  once at the end-of-period tariff. Previously the whole period used a single
+  tariff, which overstated periods before 2026-02-01 by 2 to 3 € and misbilled
+  the one period a year that crosses a change.
 - `sensor.agere_forecast` dropped by about 0.70 € at every midnight and climbed
   back through the day. The projection counted elapsed days as whole numbers, so
   the remaining days fell by one the instant the date changed while the metered

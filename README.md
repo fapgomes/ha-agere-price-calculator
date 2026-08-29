@@ -313,6 +313,53 @@ anything: dates must stay in order, and meter values must never decrease.
 All three accept an optional `config_entry`, needed only if you run more than
 one AGERE entry.
 
+### Tariffs
+
+The integration ships AGERE's tariff calendar, reconstructed from real Doméstico
+invoices. It is a list of **effective dates**, not a table by year, because the
+values do not change on the calendar year and do not all change together:
+
+| Effective from | What changed |
+|---|---|
+| `2024-12-12` | the earliest date with evidence |
+| `2025-01-01` | water and sanitation resource taxes |
+| `2026-01-01` | waste-management tax |
+| `2026-02-01` | water tiers, availabilities, drainage, waste |
+
+**Configure → Tariffs** lists them newest first, annotated with what each one
+changed, and lets you add, edit or delete an entry. A new entry arrives
+pre-filled from the most recent one, so a tariff update means typing only the
+values that moved. Updates to the integration add only effective dates newer
+than the last one seeded, so a new release can ship next year's tariff without
+overwriting an edit or bringing back something you deleted.
+
+#### Periods that cross a tariff change
+
+Once a year a billing period straddles an effective date. AGERE splits it **per
+component** — only the components whose price actually changed — and the
+integration does the same:
+
+```
+Period 2026-01-20 → 2026-02-15 (27 days, 15 m³), tariff changed on 2026-02-01
+
+  water    20/01–31/01   12 days   7 m³   tiers 2/4/6/10    old prices
+           01/02–15/02   15 days   8 m³   tiers 3/5/8/13    new prices
+  taxes    20/01–15/02   27 days  15 m³   unchanged, so a single line
+  fixed    billed once, at the tariff in force on 2026-02-15
+```
+
+Consumption is shared out in proportion to the days, and the water tiers are
+reprorated and **restart from zero** in each sub-period — the second half of the
+period is back on tier 1. That is what the invoices show.
+
+#### An unknown price
+
+The top water tier (above 25 m³) has **no known price before 2026-02-01**: it was
+never billed, and the jump from the tier below it is 43%, so guessing would
+understate the total by a plausible-looking amount. A period that reaches it
+reports an error for that period alone — the rest of the history keeps its
+totals — and the message says where to fill the value in.
+
 ### Options
 
 Available via **Configure → Charges and VAT** on the integration entry:
@@ -327,7 +374,7 @@ Available via **Configure → Charges and VAT** on the integration entry:
 
 | Entity ID | Description |
 |---|---|
-| `sensor.agere_total_cost` | Running total cost (EUR) for the current billing period — all enabled components plus VAT. Attributes include the base (pre-VAT), the VAT amount, period consumption, each component's cost, and the period itself: `cycle_start`, `cycle_end`, `billing_days`, `billing_days_estimated`, `cycle_overdue`, `next_reading_date`. |
+| `sensor.agere_total_cost` | Running total cost (EUR) for the current billing period — all enabled components plus VAT. Attributes include the base (pre-VAT), the VAT amount, period consumption, each component's cost, the period itself (`cycle_start`, `cycle_end`, `billing_days`, `billing_days_estimated`, `cycle_overdue`, `next_reading_date`), the tariff applied (`tariff_effective_from`, `tariff_split`, `sub_periods`) and `lines`, one entry per invoice line with its component, sub-period, quantity, rate, value and VAT liability. |
 | `sensor.agere_marginal_price` | Cost of the next cubic metre (EUR/m³) at the current point in the cycle — the active water tier's rate plus any enabled variable components and VAT. |
 | `sensor.agere_cycle_consumption` | Consumption (m³) accumulated so far in the current billing cycle. |
 | `sensor.agere_water_cost` | Water sub-cost (tiers + availability), when water is enabled. |
@@ -335,7 +382,7 @@ Available via **Configure → Charges and VAT** on the integration entry:
 | `sensor.agere_waste_cost` | Waste sub-cost (variable + fixed, never VAT), when waste is enabled. |
 | `sensor.agere_taxes_cost` | Government-taxes sub-cost, when taxes is enabled. |
 | `sensor.agere_forecast` | Projected total (EUR) for the period in progress, once it closes. Attributes: `projected_m3`, `metered_m3`, `days_elapsed`, `days_remaining`, `current_daily_m3`, `historical_daily_m3`, `weight_on_current_rate`, `periods_in_history`. Diagnostic entity. |
-| `sensor.agere_last_invoice` | Total (EUR) of the most recent **closed** billing period. Attributes list every derived period (start, end, days, m³, total) and the reading log itself. Diagnostic entity. |
+| `sensor.agere_last_invoice` | Total (EUR) of the most recent **closed** billing period. Attributes list every derived period (start, end, days, m³, and either `total` or `error`) and the reading log itself. Diagnostic entity. |
 
 Per-component sensors are only created for components that are enabled in
 the options.
@@ -370,6 +417,169 @@ The forecast is a projection of *consumption*; the cost is then computed by the
 same engine as any other period, so the tier proration and the fixed charges are
 handled identically.
 
+## Charting the billing periods
+
+`sensor.agere_last_invoice` carries every derived period in its `cycles`
+attribute, so a chart of what each period cost needs no reconstruction from
+statistics — and, unlike a monthly bucket, the columns land on the real period
+boundaries, which are 28 to 33 days apart rather than calendar months.
+
+With [apexcharts-card](https://github.com/RomRider/apexcharts-card):
+
+<details>
+<summary>Card configuration</summary>
+
+```yaml
+type: custom:apexcharts-card
+update_interval: 1h
+# The window tracks the month, not the day, because the slots are monthly:
+# ending 35 days past the end of the current month keeps the gap to the right of
+# the forecast stable from month to month (~11 px, a little more than the ~9 px
+# between bars). With a smaller offset the forecast bar gets clipped by the
+# margin, since half its width is worth ~10 days of axis. 430d fits 13 closed
+# periods plus the forecast.
+graph_span: 430d
+span:
+  end: month
+  offset: +35d
+header:
+  show: true
+  title: AGERE — cost per billing period
+  show_states: false
+apex_config:
+  chart:
+    # 290px rather than 250px: the rotated x-axis labels need the extra height.
+    height: 290px
+    # Stacked, not grouped: grouping splits each slot between the two series and
+    # halves every bar. The two series never have a point in the same slot, so
+    # stacking looks identical and gives them the full width.
+    stacked: true
+  dataLabels:
+    enabled: false
+  plotOptions:
+    bar:
+      # With evenly spaced slots the width becomes predictable (the smallest
+      # distance between points is always one month). 70% leaves a visible gap
+      # between every pair of bars, the last billed one and the forecast
+      # included.
+      columnWidth: 70%
+      borderRadius: 3
+      borderRadiusApplication: end
+  stroke:
+    show: true
+    width: 2
+  fill:
+    type: solid
+    opacity: 0.4
+  grid:
+    show: true
+    strokeDashArray: 0
+    borderColor: rgba(255, 255, 255, 0.08)
+    padding:
+      left: 10
+      right: 12
+      bottom: 5
+  xaxis:
+    labels:
+      # MMM/yy and not MMM yy: "Ago 25" reads as day 25, "Ago/25" as the year.
+      # MMM alone will not do over a 430-day window, which spans two years.
+      format: MMM/yy
+      # On a datetime axis ApexCharts ignores tickAmount and places one tick per
+      # month — 14 horizontal labels across the width of the card, which
+      # overlapped. Rotated 45° they fit; hideOverlappingLabels drops the ones
+      # that still collide on narrow screens instead of drawing them on top of
+      # each other.
+      rotate: -45
+      rotateAlways: true
+      hideOverlappingLabels: true
+      style:
+        fontSize: 11px
+  tooltip:
+    # Per bar, not shared: with two series the shared mode shows both, and one
+    # of them is always empty in any given slot.
+    shared: false
+    intersect: true
+    x:
+      # Month and year, not the date: the point sits on the 15th by
+      # construction, so showing "15/08/2026" would invent a period end date.
+      format: MMMM yyyy
+series:
+  - entity: sensor.agere_last_invoice
+    name: Billed
+    type: column
+    color: '#5B8DEF'
+    float_precision: 2
+    data_generator: |
+      // One point per closed period, in the slot of the month it closed in.
+      const cycles =
+        hass.states['sensor.agere_last_invoice']?.attributes?.cycles ?? [];
+      // T12:00 so the timezone cannot push the date back a day.
+      const slot = (iso) => {
+        const d = new Date(iso + 'T12:00:00');
+        return new Date(d.getFullYear(), d.getMonth(), 15, 12, 0, 0).getTime();
+      };
+      const nextMonth = (ms) => {
+        const d = new Date(ms);
+        d.setMonth(d.getMonth() + 1);
+        return d.getTime();
+      };
+      // Should there ever be two readings in the same month, both periods would
+      // land in the same slot and — the series being stacked — add up into a
+      // single bar. Walking monotonically pushes the second one into the next
+      // month: that pair's label is then off by a month, but no value is lost.
+      let previous = null;
+      return cycles
+        .filter((p) => Number.isFinite(Number(p.total)))
+        .map((p) => {
+          const x = slot(p.end);
+          previous =
+            previous !== null && x <= previous ? nextMonth(previous) : x;
+          return [previous, Number(p.total)];
+        });
+
+  - entity: sensor.agere_forecast
+    name: Forecast (in progress)
+    type: column
+    color: '#9AA5B1'
+    float_precision: 2
+    data_generator: |
+      // A single column, in the slot of the month the period in progress ends
+      // in. Returns empty while the sensor does not exist, rather than blowing
+      // up.
+      const cycleEnd =
+        hass.states['sensor.agere_total_cost']?.attributes?.cycle_end;
+      const value = Number(hass.states['sensor.agere_forecast']?.state);
+      if (!cycleEnd || !Number.isFinite(value)) return [];
+      const slot = (iso) => {
+        const d = new Date(iso + 'T12:00:00');
+        return new Date(d.getFullYear(), d.getMonth(), 15, 12, 0, 0).getTime();
+      };
+      const nextMonth = (ms) => {
+        const d = new Date(ms);
+        d.setMonth(d.getMonth() + 1);
+        return d.getTime();
+      };
+      // Repeats the walk of the "Faturado" series — each data_generator runs in
+      // isolation, there is no way to share the result — purely to know which
+      // slot was used last and not write over it. That happens whenever the
+      // period in progress closes in the same month the previous one did.
+      const cycles =
+        hass.states['sensor.agere_last_invoice']?.attributes?.cycles ?? [];
+      let previous = null;
+      for (const p of cycles) {
+        if (!Number.isFinite(Number(p.total))) continue;
+        const x = slot(p.end);
+        previous = previous !== null && x <= previous ? nextMonth(previous) : x;
+      }
+      const x = slot(cycleEnd);
+      return [[previous !== null && x <= previous ? nextMonth(previous) : x, value]];
+```
+
+</details>
+
+The second series adds the period in progress, from `sensor.agere_forecast`, so
+past invoices and the projected one sit side by side.
+
 ## Energy dashboard
 
 In **Settings → Dashboards → Energy → Water consumption**, add your
@@ -401,12 +611,20 @@ Two caveats remain for the period in progress:
 
 ## Accuracy
 
-The calculation engine is validated to the cent against three real AGERE
-invoices:
+The calculation engine is validated against 19 real AGERE Doméstico invoices
+spanning both sides of the 2026-02-01 tariff change, two of which cover periods
+that cross an effective date. **18 of the 19 reproduce to the cent.** Two of them
+ship as test fixtures:
 
 - 28 m³ over 30 days → 71.21 € total.
 - 18 m³ over 28 days → 44.21 € total (tier limits prorated to 5/9/14/23 m³
   for the 28-day period).
+
+The one exception is a 32-day period, where AGERE used a tier limit of 6 m³,
+which is `ceil(5 × 32/30)`, while three independent 28-day invoices require
+rounding (`10 × 28/30 = 9.333 → 9`, not 10). No single rule fits both, so
+rounding is kept and that period computes 0.16 € high. A 31- or 32-day invoice
+would settle it.
 
 ## License
 
