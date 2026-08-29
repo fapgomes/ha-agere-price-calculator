@@ -5,7 +5,10 @@ import logging
 from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
-from .const import CONF_READINGS, DOMAIN, PLATFORMS
+from .const import (
+    CONF_READINGS, CONF_TARIFFS, CONF_TARIFFS_SEEDED_THROUGH, DOMAIN,
+    PLATFORMS,
+)
 from .readings import SOURCE_AUTO
 
 if TYPE_CHECKING:
@@ -25,9 +28,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not hass.services.has_service(DOMAIN, SERVICE_SET_READING):
         async_setup_services(hass)
+    _seed_tariffs(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
+
+
+def _seed_tariffs(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Write the built-in tariffs, and later only ones newer than the mark.
+
+    Nothing stored is ever overwritten, so an edited or deleted snapshot stays
+    as the user left it. Options are written only when something is added,
+    because writing them reloads the entry.
+    """
+    from .entry_options import (
+        seeded_through_from_options, tariffs_from_options, tariffs_to_options,
+    )
+    from .tariffs import BUILTIN_SCHEDULE
+
+    try:
+        stored = tariffs_from_options(entry.options)
+        mark = seeded_through_from_options(entry.options)
+    except ValueError as err:
+        _LOGGER.error(
+            "Stored AGERE tariffs are invalid (%s); leaving them untouched and "
+            "falling back to the built-in schedule. Fix them under Settings -> "
+            "Devices & Services -> AGERE -> Configure -> Tariffs", err,
+        )
+        return
+
+    merged, new_mark = stored.merge_newer(BUILTIN_SCHEDULE, mark)
+    already = entry.options.get(CONF_TARIFFS) or []
+    if len(merged) == len(already) and mark == new_mark:
+        return
+
+    hass.config_entries.async_update_entry(entry, options={
+        **entry.options,
+        CONF_TARIFFS: tariffs_to_options(merged),
+        CONF_TARIFFS_SEEDED_THROUGH: new_mark.isoformat(),
+    })
+    _LOGGER.info(
+        "Seeded the AGERE tariff schedule through %s (%d entries)",
+        new_mark.isoformat(), len(merged),
+    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
