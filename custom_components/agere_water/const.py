@@ -1,8 +1,10 @@
 """Constants and tariff configuration for the AGERE Water Price integration."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
+
+from .tariffs import BUILTIN_SCHEDULE, TariffSchedule
 
 DOMAIN = "agere_water"
 PLATFORMS = ["sensor"]
@@ -17,6 +19,8 @@ CONF_WASTE = "enable_waste"
 CONF_TAXES = "enable_taxes"
 CONF_READINGS = "readings"
 CONF_NEXT_READING_DATE = "next_reading_date"
+CONF_TARIFFS = "tariffs"
+CONF_TARIFFS_SEEDED_THROUGH = "tariffs_seeded_through"
 
 # tariff override keys (stored as strings in options, parsed to Decimal)
 CONF_WATER_TIER_PRICES = "water_tier_prices"      # list[str], length 5
@@ -34,32 +38,10 @@ DEFAULT_VAT_RATE = Decimal("0.06")
 
 
 @dataclass(frozen=True)
-class Tariff:
-    """AGERE Doméstico tariff values (2026 defaults)."""
-
-    water_tier_bounds: tuple[int, ...] = (5, 10, 15, 25)
-    water_tier_prices: tuple[Decimal, ...] = (
-        Decimal("0.5080"),
-        Decimal("0.6636"),
-        Decimal("0.8605"),
-        Decimal("1.8765"),
-        Decimal("2.6852"),
-    )
-    water_availability: Decimal = Decimal("4.8623")
-    sanitation_drainage: Decimal = Decimal("0.4809")
-    sanitation_availability: Decimal = Decimal("4.8766")
-    waste_variable: Decimal = Decimal("0.0147")
-    waste_fixed: Decimal = Decimal("2.5257")
-    tax_water: Decimal = Decimal("0.0382")
-    tax_sanitation: Decimal = Decimal("0.0150")
-    tax_waste_mgmt: Decimal = Decimal("2.8821")
-
-
-@dataclass(frozen=True)
 class CalcConfig:
-    """Everything the calculator needs beyond consumption and days."""
+    """Everything the calculator needs beyond the period and its consumption."""
 
-    tariff: Tariff = field(default_factory=Tariff)
+    schedule: TariffSchedule = BUILTIN_SCHEDULE
     include_water: bool = True
     include_sanitation: bool = True
     include_waste: bool = True
@@ -67,5 +49,3 @@ class CalcConfig:
     include_vat: bool = True
     vat_rate: Decimal = DEFAULT_VAT_RATE
 
-
-DEFAULT_TARIFF = Tariff()
