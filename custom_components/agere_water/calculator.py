@@ -1,10 +1,12 @@
 """Pure AGERE Doméstico billing engine. No Home Assistant dependencies."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from .const import CalcConfig, Tariff
+from .const import CalcConfig
 
 _CENT = Decimal("0.01")
 _TENTHOUSANDTH = Decimal("0.0001")
@@ -19,6 +21,48 @@ def money(value: Decimal) -> Decimal:
 def price4(value: Decimal) -> Decimal:
     """Round a unit price to 4 decimals, half up."""
     return Decimal(value).quantize(_TENTHOUSANDTH, rounding=ROUND_HALF_UP)
+
+
+@dataclass(frozen=True)
+class SubPeriod:
+    """A stretch of a billing period over which one component's rate is constant."""
+
+    start: date
+    end: date
+    days: int
+
+
+def sub_periods(
+    start: date, end: date, change_dates: Sequence[date]
+) -> list[SubPeriod]:
+    """Cut [start, end] at each change date, which opens a new sub-period."""
+    edges = [start, *change_dates]
+    out = []
+    for i, begins in enumerate(edges):
+        finishes = edges[i + 1] - timedelta(days=1) if i + 1 < len(edges) else end
+        out.append(SubPeriod(begins, finishes, (finishes - begins).days + 1))
+    return out
+
+
+def allocate(consumption: Decimal, subs: Sequence[SubPeriod]) -> list[Decimal]:
+    """Split consumption between sub-periods, pro rata by days.
+
+    Each share but the last is rounded to whole m³, which is what the invoice
+    lines show; the last takes the remainder so the shares always sum to the
+    metered consumption. Rounding every share independently can overshoot — 7 m³
+    over 15 + 15 days would give 4 + 4.
+    """
+    total_days = sum(s.days for s in subs)
+    shares: list[Decimal] = []
+    used = Decimal(0)
+    for s in subs[:-1]:
+        share = (consumption * s.days / total_days).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+        shares.append(share)
+        used += share
+    shares.append(consumption - used)
+    return shares
 
 
 def tier_limits(days: int, bounds: tuple[int, ...]) -> list[int]:
