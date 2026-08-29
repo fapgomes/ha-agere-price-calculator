@@ -97,7 +97,8 @@ class _AgereData:
             self._seed(meter_total)
             return
 
-        today = dt_util.now().date()
+        now = dt_util.now()
+        today = now.date()
         self.cycle = self.log.current_cycle(meter_total, self.next_reading_date)
         self.days_elapsed = days_elapsed(self.cycle, today)
         self.overdue = is_overdue(self.cycle, today)
@@ -109,9 +110,12 @@ class _AgereData:
         self.closed = [
             (c, calcular(c.consumption, c.days, self.config)) for c in closed_cycles
         ]
-        self.projected_m3 = project_consumption(
-            self.cycle, self.days_elapsed, closed_cycles
-        )
+        # Continuous, not the whole-day count: an integer makes the projection
+        # step down by a day of historical consumption at every midnight.
+        elapsed = Decimal(
+            int((now - dt_util.start_of_local_day(self.cycle.start)).total_seconds())
+        ) / Decimal(86400)
+        self.projected_m3 = project_consumption(self.cycle, elapsed, closed_cycles)
         self.forecast = calcular(self.projected_m3, self.cycle.days, self.config)
         for cb in self._listeners:
             cb()

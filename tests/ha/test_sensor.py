@@ -177,3 +177,40 @@ async def test_forecast_without_history_uses_the_current_rate(hass: HomeAssistan
     assert a["periods_in_history"] == 0
     assert a["historical_daily_m3"] is None
     assert a["projected_m3"] >= a["metered_m3"]
+
+
+async def test_forecast_does_not_step_at_midnight(hass: HomeAssistant, freezer):
+    """days_elapsed is an integer for display, but using it as the divisor for a
+    rate makes the projection lose a whole day of expected consumption the
+    instant the date changes — a 0.71 EUR cliff on a real period.
+
+    The time zone has to be set explicitly: the test harness runs in US/Pacific,
+    where a +01:00 timestamp of 23:59 is still mid-afternoon and the date never
+    turns over."""
+    await hass.config.async_set_time_zone("Europe/Lisbon")
+    freezer.move_to("2026-08-27 23:59:00+01:00")
+    await _setup(hass, "543", **{
+        CONF_READINGS: READINGS,
+        CONF_NEXT_READING_DATE: "2026-09-03",
+    })
+    before = Decimal(hass.states.get("sensor.agere_forecast").state)
+
+    freezer.move_to("2026-08-28 00:01:00+01:00")
+    hass.states.async_set("sensor.water_meter_total", "543.001",
+                          {"unit_of_measurement": "m³"})
+    await hass.async_block_till_done()
+    after = Decimal(hass.states.get("sensor.agere_forecast").state)
+
+    assert abs(after - before) < Decimal("0.05")
+
+
+async def test_days_elapsed_attribute_stays_a_whole_number(hass: HomeAssistant, freezer):
+    """The fractional value is for the projection only; what is shown counts
+    days inclusively, as the invoice does."""
+    await hass.config.async_set_time_zone("Europe/Lisbon")
+    freezer.move_to("2026-08-27 12:00:00+01:00")
+    await _setup(hass, "543", **{
+        CONF_READINGS: READINGS,
+        CONF_NEXT_READING_DATE: "2026-09-03",
+    })
+    assert hass.states.get("sensor.agere_total_cost").attributes["days_elapsed"] == 15

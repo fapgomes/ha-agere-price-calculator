@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `sensor.agere_forecast` dropped by about 0.70 € at every midnight and climbed
+  back through the day. The projection counted elapsed days as whole numbers, so
+  the remaining days fell by one the instant the date changed while the metered
+  consumption had grown only by that day's actual use. Elapsed time is now
+  continuous, and the curve is smooth.
+
 ## [0.2.0] - 2026-08-28
 
 ### Changed

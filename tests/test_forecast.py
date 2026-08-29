@@ -48,3 +48,36 @@ def test_no_history_uses_the_current_rate_alone():
 
 def test_no_history_and_no_elapsed_days_projects_what_is_metered():
     assert project_consumption(CURRENT, 0, []) == Decimal("7.000")
+
+
+def test_projection_is_continuous_across_midnight():
+    """days_elapsed used to be an integer, so at midnight the remaining days
+    dropped by one and the projection lost a whole day of historical
+    consumption at once — 0.71 EUR on a real period."""
+    before = project_consumption(CURRENT, Decimal("15.9999"), CLOSED)
+    after = project_consumption(CURRENT, Decimal("16"), CLOSED)
+    assert abs(after - before) < Decimal("0.001")
+
+
+def test_a_day_of_average_use_leaves_the_projection_flat():
+    """The property that makes the curve smooth: a day of exactly average use
+    adds as much metered consumption as the day it removes from the remaining
+    count, so the forecast does not move."""
+    historical = Decimal("36") / Decimal("61")
+    start = project_consumption(CURRENT, Decimal("15"), CLOSED)
+    later = Cycle(
+        CURRENT.start, CURRENT.end, 22, CURRENT.consumption + historical, False
+    )
+    assert abs(project_consumption(later, Decimal("16"), CLOSED) - start) < Decimal("0.001")
+
+
+def test_a_heavy_day_raises_the_projection():
+    heavy = Cycle(CURRENT.start, CURRENT.end, 22, CURRENT.consumption + 3, False)
+    assert (project_consumption(heavy, Decimal("16"), CLOSED)
+            > project_consumption(CURRENT, Decimal("15"), CLOSED))
+
+
+def test_elapsed_is_clamped_to_the_period():
+    """An overdue period keeps counting days; the projection must not start
+    subtracting negative remaining days."""
+    assert project_consumption(CURRENT, Decimal("30"), CLOSED) == Decimal("7.000")

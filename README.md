@@ -348,14 +348,18 @@ history alone ignores what is actually happening now. So the two are blended,
 weighted by how far into the period you are:
 
 ```
-weight        = days_elapsed / billing_days
-daily rate    = weight × (metered / days_elapsed) + (1 − weight) × historical daily
-projected m³  = daily rate × billing_days
+projected m³ = metered so far + days remaining × historical daily rate
 ```
 
-On day one the projection is essentially the historical average; on the last day
-it is exactly what the meter shows; in between it transitions smoothly, with no
-thresholds. The historical average is total m³ over total days across every
+That is the blend written out: weighting the period's own rate by how far in you
+are, and history by the rest, simplifies to exactly this. On day one the
+projection is essentially the historical average; on the last day it is exactly
+what the meter shows; in between it moves only when a day's use differs from the
+average.
+
+`days remaining` is continuous, not a whole-day count — with an integer the
+projection would drop by a full day of historical consumption the instant the
+date changed, about 0.70 € on a typical period. The historical average is total m³ over total days across every
 closed period, so a long period weighs more than a short one. The projection is
 never allowed to fall below what the meter already shows.
 

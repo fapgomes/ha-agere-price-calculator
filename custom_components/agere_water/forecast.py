@@ -29,23 +29,32 @@ def _historical_daily(closed: Sequence[Cycle]) -> Decimal | None:
 
 
 def project_consumption(
-    current: Cycle, days_elapsed: int, closed: Sequence[Cycle]
+    current: Cycle, elapsed_days: Decimal | int, closed: Sequence[Cycle]
 ) -> Decimal:
-    """Projected consumption (m³) for the whole of `current`, rounded to litres."""
+    """Projected consumption (m³) for the whole of `current`, rounded to litres.
+
+    Blending the period's own rate with the historical average, weighted by how
+    far in we are, simplifies: the two `elapsed` terms cancel and what is left is
+    what the meter already shows plus history for the days that remain.
+
+        weight × (metered / elapsed) + (1 − weight) × historical, all × days
+        = metered + (days − elapsed) × historical
+
+    `elapsed_days` must be continuous, not a whole-day count. With an integer the
+    remaining days drop by one the instant the date changes, and the projection
+    falls by a full day of historical consumption in a single step.
+    """
     metered = Decimal(current.consumption)
+    days = Decimal(current.days)
+    elapsed = min(max(Decimal(elapsed_days), Decimal(0)), days)
     historical = _historical_daily(closed)
 
-    current_daily = metered / Decimal(days_elapsed) if days_elapsed > 0 else None
-    if current_daily is None and historical is None:
-        return metered.quantize(_MILLI)
-    if historical is None:
-        daily = current_daily
-    elif current_daily is None:
-        daily = historical
+    if historical is not None:
+        projected = metered + (days - elapsed) * historical
+    elif elapsed > 0:
+        projected = metered * days / elapsed
     else:
-        weight = min(Decimal(days_elapsed) / Decimal(current.days), Decimal(1))
-        daily = weight * current_daily + (Decimal(1) - weight) * historical
+        projected = metered
 
-    projected = daily * Decimal(current.days)
     # Never forecast less than the meter already shows.
     return max(projected, metered).quantize(_MILLI)
