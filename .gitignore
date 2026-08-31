@@ -6,3 +6,6 @@ __pycache__/
 
 # personal data (invoice extracts) — never committed
 *.local.md
+
+# superpowers specs/plans — kept locally only
+docs/superpowers/
